@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Regras de backup. O app ainda não persiste dados sensíveis; quando o
+     armazenamento seguro de credenciais for implementado, ele deve ser
+     excluído explicitamente do backup em nuvem. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="freqtrade_secure_prefs.xml" />
+</full-backup-content>

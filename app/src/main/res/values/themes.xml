@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema base. O tema de splash/launch é definido via Theme.FreqtradeUI em
+         themes.xml, garantindo fundo escuro consistente com o Material 3. -->
+    <style name="Theme.FreqtradeUI" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/brand_background</item>
+        <item name="android:navigationBarColor">@color/brand_background</item>
+        <item name="android:windowBackground">@color/brand_background</item>
+    </style>
+</resources>
