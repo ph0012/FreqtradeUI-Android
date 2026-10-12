@@ -12,14 +12,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.freqtradeui.android.FreqtradeApplication
 import com.freqtradeui.android.ui.dashboard.DashboardScreen
 import com.freqtradeui.android.ui.settings.SettingsScreen
 import com.freqtradeui.android.ui.trades.TradesScreen
@@ -50,6 +54,12 @@ fun AppNavigation(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+
+    // Factory compartilhada pela aplicação: injeta o gerenciador de túnel e o
+    // armazenamento seguro nas telas que precisam deles.
+    val context = LocalContext.current
+    val application = context.applicationContext as FreqtradeApplication
+    val viewModelFactory = remember(application) { application.viewModelFactory }
 
     Scaffold(
         modifier = modifier,
@@ -87,13 +97,14 @@ fun AppNavigation(
                     onConfigureConnection = {
                         navController.navigate(Destination.Settings.route)
                     },
+                    viewModel = viewModel(factory = viewModelFactory),
                 )
             }
             composable(Destination.Trades.route) {
                 TradesScreen()
             }
             composable(Destination.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(viewModel = viewModel(factory = viewModelFactory))
             }
         }
     }
