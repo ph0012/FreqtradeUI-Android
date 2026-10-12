@@ -73,12 +73,12 @@ class DashboardViewModel(
             initialValue = DashboardUiState(),
         )
 
-    /** Encerra o túnel ativo. */
-    fun disconnect() {
-        tunnelManager.disconnect()
-    }
-
-    /** Aprova a chave de host pendente (TOFU), após conferência do usuário. */
+    /**
+     * Aprova a chave de host pendente (TOFU), após conferência do usuário.
+     *
+     * O painel mantém o diálogo porque a decisão pode ser pedida durante uma
+     * reconexão com a tela aberta. Desconectar é ação da lista de perfis.
+     */
     fun approveHostKey() {
         tunnelManager.approveHostKey()
     }

@@ -3,15 +3,12 @@ package com.freqtradeui.android.ui.dashboard
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -123,19 +120,12 @@ fun DashboardScreen(
 
             EmptyState(message = "Nenhuma opera\u00e7\u00e3o aberta.")
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (connected) {
-                OutlinedButton(
-                    onClick = viewModel::disconnect,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = "Desconectar t\u00fanel SSH")
-                }
-            } else {
+            // Desconectar e feito na lista de perfis, no card do perfil ativo:
+            // o painel so orienta quando o tunel cai com a tela aberta.
+            if (!connected) {
                 Text(
                     text = "O t\u00fanel n\u00e3o est\u00e1 ativo. Volte para a lista " +
-                        "de perfis para conectar.",
+                        "de perfis para reconectar.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
