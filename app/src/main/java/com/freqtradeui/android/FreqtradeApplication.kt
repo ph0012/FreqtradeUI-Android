@@ -7,7 +7,9 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.freqtradeui.android.data.repository.ConnectionProfileRepository
 import com.freqtradeui.android.data.repository.DataStoreProfileStorage
+import com.freqtradeui.android.data.repository.FreqtradeRepository
 import com.freqtradeui.android.security.HostKeyStore
+import com.freqtradeui.android.security.SecureApiCredentialStore
 import com.freqtradeui.android.security.SecureSecretStore
 import com.freqtradeui.android.ssh.SshConnectionService
 import com.freqtradeui.android.ssh.SshTunnelManager
@@ -17,9 +19,9 @@ import com.freqtradeui.android.ui.profiles.ProfilesViewModel
 /**
  * Ponto de composição das dependências de longa duração.
  *
- * Agrupa em [container] o que é compartilhado entre UI e serviço: o
- * gerenciador do túnel, os repositórios e o cofre de segredos. Composição
- * manual e explícita, sem framework de injeção.
+ * Agrupa em [container] o que é compartilhado entre UI e serviço: o gerenciador
+ * do túnel, os repositórios e os cofres de segredos. Composição manual e
+ * explícita, sem framework de injeção.
  */
 class FreqtradeApplication : Application() {
 
@@ -30,9 +32,10 @@ class FreqtradeApplication : Application() {
     }
 
     /**
-     * Dependências compartilhadas. O gerenciador do túnel é uma instância só,
-     * usada tanto pela UI quanto pelo serviço — assim o estado exibido é o
-     * mesmo que o serviço mantém.
+     * Dependências compartilhadas.
+     *
+     * O gerenciador do túnel é uma instância só, usada tanto pela UI quanto pelo
+     * serviço — assim o estado exibido é o mesmo que o serviço mantém.
      */
     val container: AppContainer by lazy { AppContainer(applicationContext) }
 
@@ -40,10 +43,18 @@ class FreqtradeApplication : Application() {
     val viewModelFactory: ViewModelProvider.Factory by lazy {
         viewModelFactory {
             initializer {
-                ProfilesViewModel(container.profileRepository, container.tunnelManager)
+                ProfilesViewModel(
+                    repo = container.profileRepository,
+                    tunnelManager = container.tunnelManager,
+                    api = container.freqtradeRepository,
+                )
             }
             initializer {
-                DashboardViewModel(container.profileRepository, container.tunnelManager)
+                DashboardViewModel(
+                    repository = container.profileRepository,
+                    tunnelManager = container.tunnelManager,
+                    api = container.freqtradeRepository,
+                )
             }
         }
     }
@@ -68,21 +79,33 @@ class FreqtradeApplication : Application() {
 /**
  * Agrupamento das dependências compartilhadas.
  *
- * @param tunnelManager gerenciador do túnel SSH (instância única).
- * @param profileRepository acesso a perfis e segredos.
+ * @param context contexto de aplicação, usado pelos cofres cifrados.
  */
 class AppContainer(context: Context) {
+
+    /** Gerenciador do túnel SSH (instância única, compartilhada com o serviço). */
     val tunnelManager: SshTunnelManager = SshConnectionService.tunnelManager
 
+    /** Perfis salvos e chave privada SSH. */
     val profileRepository: ConnectionProfileRepository = ConnectionProfileRepository(
         storage = DataStoreProfileStorage(context),
         secrets = SecureSecretStore(context),
     )
 
     /**
-     * Chaves de host confiáveis. A mesma instância do gerenciador de túnel,
-     * para não abrir duas vezes o arquivo cifrado.
+     * Acesso à API do Freqtrade sobre o túnel.
+     *
+     * As credenciais da API usam um cofre **separado** do SSH: são segredos
+     * distintos, com ciclo de vida próprio, e misturá-los dificultaria a
+     * auditoria e a remoção individual.
+     */
+    val freqtradeRepository: FreqtradeRepository = FreqtradeRepository(
+        credentials = SecureApiCredentialStore(context),
+    )
+
+    /**
+     * Chaves de host confiáveis. A mesma instância do gerenciador de túnel, para
+     * não abrir duas vezes o arquivo cifrado.
      */
     val hostKeyStore: HostKeyStore = SshConnectionService.hostKeyStore
 }
-

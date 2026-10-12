@@ -133,6 +133,14 @@ private fun ProfileEditorForm(
     var keyFileName by remember(existing?.id) { mutableStateOf(existing?.privateKeyFileName) }
     var privateKey by remember(existing?.id) { mutableStateOf<String?>(null) }
     var message by remember(existing?.id) { mutableStateOf<String?>(null) }
+    var apiUsername by remember(existing?.id) {
+        mutableStateOf(existing?.id?.let { viewModel.apiUsername(it) } ?: "")
+    }
+    var apiPassword by remember(existing?.id) { mutableStateOf("") }
+    // Perfil ja tem credenciais gravadas? Decide o rotulo do campo de senha.
+    val hasApiSecret = remember(existing?.id) {
+        existing?.id?.let { viewModel.hasApiCredentials(it) } ?: false
+    }
 
     // Seletor de documentos: o acesso a chave e concedido pelo usuario ao
     // escolher o arquivo, sem nenhuma permissao extra no manifesto.
@@ -341,6 +349,44 @@ private fun ProfileEditorForm(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            Text(
+                "API do Freqtrade",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = "Credenciais da API configuradas na VPS (endpoint /api/v1). " +
+                    "Sao diferentes das credenciais SSH e ficam guardadas cifradas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = apiUsername,
+                onValueChange = { apiUsername = it },
+                label = { Text("Usuario da API") },
+                singleLine = true,
+                enabled = !isConnected,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = apiPassword,
+                onValueChange = { apiPassword = it },
+                label = {
+                    Text(
+                        if (hasApiSecret) {
+                            "Nova senha da API (vazio mantem a atual)"
+                        } else {
+                            "Senha da API"
+                        },
+                    )
+                },
+                singleLine = true,
+                enabled = !isConnected,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -357,6 +403,12 @@ private fun ProfileEditorForm(
                                 draft.id,
                                 ProfileSecret(it, passphrase.ifBlank { null }),
                             )
+                        }
+                        // Credenciais da API vao ao cofre cifrado. A senha so e
+                        // gravada quando o usuario digita uma nova; deixa-la em
+                        // branco preserva a atual.
+                        if (apiPassword.isNotBlank()) {
+                            viewModel.saveApiCredentials(draft.id, apiUsername, apiPassword)
                         }
                         onSave(draft)
                     },

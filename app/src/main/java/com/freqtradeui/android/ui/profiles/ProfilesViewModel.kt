@@ -10,6 +10,7 @@ import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.data.repository.ConnectionProfileRepository
 import com.freqtradeui.android.ssh.PendingHostKey
 import com.freqtradeui.android.ssh.SshConnectionService
+import com.freqtradeui.android.data.repository.FreqtradeRepository
 import com.freqtradeui.android.ssh.SshTunnelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -91,6 +92,7 @@ data class ProfilesUiState(
 class ProfilesViewModel(
     private val repo: ConnectionProfileRepository,
     private val tunnelManager: SshTunnelManager,
+    private val api: FreqtradeRepository,
 ) : ViewModel() {
 
     /** Decisões locais pendentes (confirmações), separadas do estado real. */
@@ -201,6 +203,28 @@ class ProfilesViewModel(
      * que o formulário gerou.
      */
     fun saveSecret(profileId: String, secret: ProfileSecret) = repo.saveSecret(profileId, secret)
+
+    /**
+     * Usuario da API ja gravado para o perfil, para pre-preencher o formulario.
+     *
+     * A **senha nunca e devolvida**: depois de salva, nao ha caminho para
+     * exibi-la de novo. Para troca-la, o usuario digita uma nova.
+     */
+    fun apiUsername(profileId: String): String = api.username(profileId).orEmpty()
+
+    /** Indica se o perfil ja possui credenciais da API configuradas. */
+    fun hasApiCredentials(profileId: String): Boolean = api.hasCredentials(profileId)
+
+    /**
+     * Grava as credenciais da API do perfil, no cofre cifrado.
+     *
+     * A sessao do perfil e descartada: as credenciais mudaram, o token anterior
+     * nao vale mais.
+     */
+    fun saveApiCredentials(profileId: String, username: String, password: String) {
+        api.saveCredentials(profileId, username, password)
+        api.clearSession()
+    }
 
     /**
      * Persiste o perfil (novo ou edição) e navega com o id salvo.

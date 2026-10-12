@@ -7,7 +7,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -16,31 +20,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ui.components.CompactTopAppBar
 import com.freqtradeui.android.ui.components.ConnectionIndicator
 import com.freqtradeui.android.ui.components.EmptyState
-import com.freqtradeui.android.ui.components.PlaceholderValueCard
+import com.freqtradeui.android.ui.components.InfoCard
+import com.freqtradeui.android.ui.components.StatusDot
+import com.freqtradeui.android.ui.theme.LossRed
 import com.freqtradeui.android.ui.theme.ProfitGreen
+import com.freqtradeui.android.ui.theme.TextMuted
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * Tela principal (Dashboard) - painel do perfil conectado.
+ * Painel do perfil conectado.
  *
- * A barra superior e propositalmente compacta: respeita o alvo de toque de
- * 48 dp da seta de voltar, mas reduz altura e titulo para devolver espaco
- * vertical ao conteudo. O nome do perfil ativo aparece no titulo.
+ * Exibe apenas dados reais vindos da API do Freqtrade. Enquanto os dados não
+ * chegam, mostra estado de carregamento ou indisponibilidade — nunca um valor
+ * estimado ou simulado.
  *
- * O retorno para a lista de perfis e feito **apenas** pela seta de voltar:
- * nao ha barra inferior nem atalho redundante para a mesma tela.
- *
- * Abaixo: indicadores reais de conexao SSH/API, cards de saldo e
- * lucro/prejuizo como placeholders e a area de operacoes abertas em estado
- * vazio. Nenhum dado financeiro simulado e apresentado como real.
- *
- * @param viewModel ViewModel do dashboard, criado com a fabrica da aplicacao.
+ * @param viewModel ViewModel do painel.
  * @param onBack volta para a lista de perfis.
  * @param modifier modificador de layout.
  */
@@ -51,17 +53,20 @@ fun DashboardScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val connected = state.snapshot.status == TunnelStatus.Connected
     val pending = state.pendingHostKey
-
+    val tunnelConnected = state.snapshot.status == TunnelStatus.Connected
 
     Scaffold(
         modifier = modifier,
-        // Header padrao do app (mesmo componente da tela de perfis).
         topBar = {
             CompactTopAppBar(
                 title = state.profile?.name ?: "Painel",
                 onBack = onBack,
+                actions = {
+                    IconButton(onClick = viewModel::refresh) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Atualizar")
+                    }
+                },
             )
         },
     ) { innerPadding ->
@@ -71,65 +76,45 @@ fun DashboardScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "FreqtradeUI",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Text(
-                text = "Controle do seu bot de trading",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ConnectionCard(
+                tunnelStatus = state.snapshot.status,
+                apiError = state.error,
+                apiReady = tunnelConnected && state.hasCredentials,
+                apiBaseUrl = state.apiBaseUrl,
+                lastUpdatedAt = state.lastUpdatedAt,
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ConnectionIndicator(label = "SSH", status = state.snapshot.status)
-                // A API ainda nao foi implementada: o indicador permanece
-                // desconectado de verdade, sem simular estado.
-                ConnectionIndicator(label = "API", status = TunnelStatus.Disconnected)
-            }
-
-            state.snapshot.error?.let { msg ->
+            state.snapshot.error?.let { message ->
                 Text(
-                    text = msg,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Start,
-                )
-            }
-
-            PlaceholderValueCard(
-                title = "Saldo",
-                value = "\u2014",
-                placeholderNote = "Dados indispon\u00edveis \u2014 conecte-se ao " +
-                    "bot para ver o saldo real.",
-            )
-            PlaceholderValueCard(
-                title = "Lucro / Preju\u00edzo",
-                value = "\u2014",
-                placeholderNote = "Sem dados reais. O resumo aparece ap\u00f3s " +
-                    "conectar \u00e0 API.",
-                valueColor = ProfitGreen,
-            )
-
-            EmptyState(message = "Nenhuma opera\u00e7\u00e3o aberta.")
-
-            // Desconectar e feito na lista de perfis, no card do perfil ativo:
-            // o painel so orienta quando o tunel cai com a tela aberta.
-            if (!connected) {
-                Text(
-                    text = "O t\u00fanel n\u00e3o est\u00e1 ativo. Volte para a lista " +
-                        "de perfis para reconectar.",
+                    text = message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = LossRed,
                 )
             }
+
+            if (!tunnelConnected) {
+                EmptyState(
+                    message = "O túnel não está ativo. Volte para a lista de perfis " +
+                        "para reconectar.",
+                )
+                return@Column
+            }
+
+            if (!state.hasCredentials) {
+                EmptyState(
+                    message = "Credenciais da API não configuradas. Edite este perfil " +
+                        "e informe usuário e senha da API do Freqtrade.",
+                )
+                return@Column
+            }
+
+            if (state.loading && state.isEmpty) {
+                EmptyState(message = "Carregando dados do bot...")
+            }
+
+            DataCards(state = state)
         }
     }
 
@@ -144,10 +129,93 @@ fun DashboardScreen(
     }
 }
 
-/**
- * Dialogo que apresenta a chave de host desconhecida e pede decisao ao usuario.
- * A impressao digital deve ser conferida fora de banda antes de aprovar.
- */
+/** Card de estado: túnel SSH, comunicação com a API e última atualização. */
+@Composable
+private fun ConnectionCard(
+    tunnelStatus: TunnelStatus,
+    apiError: String?,
+    apiReady: Boolean,
+    apiBaseUrl: String,
+    lastUpdatedAt: Long?,
+) {
+    InfoCard(title = "Conexão") {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ConnectionIndicator(label = "Túnel SSH", status = tunnelStatus)
+
+            val apiColor = when {
+                apiError != null -> LossRed
+                apiReady -> ProfitGreen
+                else -> TextMuted
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusDot(status = tunnelStatus, size = 8.dp)
+                Text(
+                    text = "API: " + when {
+                        apiError != null -> "falha"
+                        apiReady -> "ok"
+                        else -> "indisponível"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = apiColor,
+                )
+            }
+
+            if (apiBaseUrl.isNotBlank()) {
+                Text(
+                    text = apiBaseUrl,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Text(
+                text = lastUpdatedAt?.let {
+                    "Última atualização: " + TIME_FORMAT.format(Date(it))
+                } ?: "Sem atualização bem-sucedida.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Cards com os dados da API, ou indisponibilidade explícita. */
+@Composable
+private fun DataCards(state: DashboardUiState) {
+    val unavailable = "—"
+
+    DashboardValueCard(
+        title = "Bot",
+        value = state.botState.ifBlank { unavailable },
+        subtitle = "estado",
+    )
+    DashboardValueCard(
+        title = "Freqtrade",
+        value = state.version.ifBlank { unavailable },
+        subtitle = state.health,
+    )
+    DashboardValueCard(
+        title = "Operações abertas",
+        value = state.openTrades?.toString() ?: unavailable,
+        subtitle = "trades",
+    )
+    DashboardValueCard(
+        title = "Saldo",
+        value = state.balanceTotal.ifBlank { unavailable },
+        subtitle = state.balanceCurrency.ifBlank { "—" },
+    )
+    DashboardValueCard(
+        title = "Lucro / Prejuízo",
+        value = state.profitTotal.ifBlank { unavailable },
+        subtitle = state.profitPercent.ifBlank { "—" },
+        valueColor = if (state.profitTotal.startsWith("-")) LossRed else ProfitGreen,
+    )
+}
+
+/** Diálogo de decisão TOFU da chave de host. */
 @Composable
 private fun HostKeyDialog(
     host: String,
@@ -158,29 +226,22 @@ private fun HostKeyDialog(
 ) {
     AlertDialog(
         onDismissRequest = onReject,
-        title = { Text("Chave de host n\u00e3o reconhecida") },
+        title = { Text("Chave de host não reconhecida") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "O servidor $host apresentou uma chave de host que " +
-                        "ainda n\u00e3o foi confiada neste dispositivo.",
+                    text = "O servidor $host apresentou uma chave de host que ainda " +
+                        "não foi confiada neste dispositivo.",
                 )
+                Text(text = "Tipo: $keyType", style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = "Tipo: $keyType",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = "Impress\u00e3o digital (SHA256):",
+                    text = "Impressão digital (SHA256):",
                     style = MaterialTheme.typography.labelMedium,
                 )
+                Text(text = fingerprint, style = MaterialTheme.typography.bodySmall)
                 Text(
-                    text = fingerprint,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    text = "Confira a impress\u00e3o digital por um canal seguro " +
-                        "antes de confiar. Aprovar s\u00f3 \u00e9 seguro se voc\u00ea " +
-                        "reconhecer esta chave.",
+                    text = "Confira a impressão digital por um canal seguro antes de " +
+                        "confiar. Aprovar só é seguro se você reconhecer esta chave.",
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
@@ -194,3 +255,5 @@ private fun HostKeyDialog(
     )
 }
 
+/** Formatação fixa de data/hora, independente do idioma do aparelho. */
+private val TIME_FORMAT = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.US)
