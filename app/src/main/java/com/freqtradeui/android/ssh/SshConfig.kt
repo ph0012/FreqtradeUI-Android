@@ -16,6 +16,10 @@ package com.freqtradeui.android.ssh
  * @param remoteHost host remoto acessível a partir da VPS (loopback do Freqtrade).
  * @param remotePort porta do Freqtrade na VPS.
  * @param localPort porta local usada pelo encaminhamento no dispositivo.
+ * @param privateKeyFileName nome do arquivo de origem da chave. É apenas
+ *        metadado de interface (não é segredo) e não participa da conexão;
+ *        permite reapresentar a seleção ao reabrir as configurações sem exibir
+ *        o conteúdo da chave.
  */
 data class SshConfig(
     val host: String,
@@ -26,6 +30,7 @@ data class SshConfig(
     val remoteHost: String = "127.0.0.1",
     val remotePort: Int = DEFAULT_REMOTE_PORT,
     val localPort: Int = DEFAULT_LOCAL_PORT,
+    val privateKeyFileName: String? = null,
 ) {
     init {
         require(host.isNotBlank()) { "O host SSH não pode ser vazio." }

@@ -15,6 +15,9 @@ import kotlinx.coroutines.launch
  *
  * @param hasSavedConfig indica se já existe uma configuração persistida
  *        (usado para exibir/ocultar a chave salva sem expô-la na UI).
+ * @param loadedConfig configuração persistida, entregue à UI para preencher
+ *        automaticamente os campos na abertura. `null` quando não há nada salvo
+ *        ou depois que o usuário edita os campos.
  * @param isConnected indica se o túnel está ativo.
  * @param isSaving indica que uma operação de salvamento está em andamento.
  * @param error mensagem de erro de validação/persistência, se houver.
@@ -22,6 +25,7 @@ import kotlinx.coroutines.launch
  */
 data class SettingsUiState(
     val hasSavedConfig: Boolean = false,
+    val loadedConfig: SshConfig? = null,
     val isConnected: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -47,7 +51,11 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        _uiState.value = _uiState.value.copy(hasSavedConfig = credentialStore.hasConfig())
+        val saved = credentialStore.loadConfig()
+        _uiState.value = SettingsUiState(
+            hasSavedConfig = credentialStore.hasConfig(),
+            loadedConfig = saved,
+        )
     }
 
     /**
@@ -61,6 +69,8 @@ class SettingsViewModel(
      * @param passphrase senha da chave privada, se houver.
      * @param remoteHost host remoto (loopback do Freqtrade na VPS).
      * @param remotePort porta do Freqtrade na VPS.
+     * @param localPort porta local usada pelo encaminhamento no dispositivo.
+     * @param privateKeyFileName nome do arquivo da chave (metadado de UI).
      * @param connectAfterSave inicia o túnel logo após salvar.
      */
     fun save(
@@ -71,11 +81,14 @@ class SettingsViewModel(
         passphrase: String,
         remoteHost: String,
         remotePort: String,
+        localPort: String,
+        privateKeyFileName: String?,
         connectAfterSave: Boolean,
     ) {
         val parsedPort = sshPort.toIntOrNull()
         val parsedRemotePort = remotePort.toIntOrNull()
-        if (parsedPort == null || parsedRemotePort == null) {
+        val parsedLocalPort = localPort.toIntOrNull()
+        if (parsedPort == null || parsedRemotePort == null || parsedLocalPort == null) {
             _uiState.value = _uiState.value.copy(error = "Portas devem ser números inteiros.")
             return
         }
@@ -95,6 +108,8 @@ class SettingsViewModel(
                 privateKeyPassphrase = passphrase.takeIf { it.isNotBlank() },
                 remoteHost = remoteHost.trim().ifBlank { "127.0.0.1" },
                 remotePort = parsedRemotePort,
+                localPort = parsedLocalPort,
+                privateKeyFileName = privateKeyFileName,
             )
         } catch (e: IllegalArgumentException) {
             _uiState.value = _uiState.value.copy(error = e.message ?: "Configuração inválida.")

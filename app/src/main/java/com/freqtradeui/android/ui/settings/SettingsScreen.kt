@@ -1,5 +1,7 @@
 package com.freqtradeui.android.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,18 +19,27 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.provider.OpenableColumns
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.freqtradeui.android.ssh.SshConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Tela de configurações da conexão SSH.
@@ -52,9 +63,78 @@ fun SettingsScreen(
     var sshPort by remember { mutableStateOf(SshConfig.DEFAULT_SSH_PORT.toString()) }
     var username by remember { mutableStateOf("") }
     var privateKey by remember { mutableStateOf("") }
+    // Nome do arquivo escolhido, exibido no campo. O conteúdo da chave fica
+    // apenas em memória em [privateKey] e nunca é renderizado na tela.
+    var privateKeyFileName by remember { mutableStateOf<String?>(null) }
     var passphrase by remember { mutableStateOf("") }
     var remoteHost by remember { mutableStateOf("127.0.0.1") }
     var remotePort by remember { mutableStateOf(SshConfig.DEFAULT_REMOTE_PORT.toString()) }
+    var localPort by remember { mutableStateOf(SshConfig.DEFAULT_LOCAL_PORT.toString()) }
+
+    // Preenche automaticamente os campos com a configuração salva, apenas na
+    // primeira vez que ela é recebida. Depois disso o usuário edita livremente;
+    // qualquer digitação passa a valer mais que o valor carregado.
+    LaunchedEffect(state.loadedConfig) {
+        state.loadedConfig?.let { cfg ->
+            host = cfg.host
+            sshPort = cfg.sshPort.toString()
+            username = cfg.username
+            privateKey = cfg.privateKey
+            privateKeyFileName = cfg.privateKeyFileName
+            passphrase = cfg.privateKeyPassphrase.orEmpty()
+            remoteHost = cfg.remoteHost
+            remotePort = cfg.remotePort.toString()
+            localPort = cfg.localPort.toString()
+        }
+    }
+
+    // Seletor de arquivos do sistema (Storage Access Framework / DocumentsUI).
+    // Lê o conteúdo do arquivo escolhido e preenche o campo da chave privada.
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var keyFileError by remember { mutableStateOf<String?>(null) }
+    val keyFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val content = context.contentResolver.openInputStream(uri)?.use { input ->
+                            input.bufferedReader().readText()
+                        } ?: error("Não foi possível abrir o arquivo selecionado.")
+                        // Nome amigável do arquivo, exibido no lugar do conteúdo.
+                        val displayName = context.contentResolver
+                            .query(uri, null, null, null, null)
+                            ?.use { cursor ->
+                                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                                if (index >= 0 && cursor.moveToFirst()) {
+                                    cursor.getString(index)
+                                } else {
+                                    null
+                                }
+                            }
+                            ?: uri.lastPathSegment
+                            ?: "arquivo selecionado"
+                        displayName to content
+                    }
+                }
+                result
+                    .onSuccess { (displayName, content) ->
+                        if (content.isNotBlank()) {
+                            privateKey = content
+                            privateKeyFileName = displayName
+                            keyFileError = null
+                        } else {
+                            keyFileError = "O arquivo selecionado está vazio."
+                        }
+                    }
+                    .onFailure { e ->
+                        keyFileError = e.message ?: "Falha ao ler o arquivo da chave."
+                    }
+            }
+        }
+    }
 
     val save: (Boolean) -> Unit = { connectAfterSave ->
         viewModel.save(
@@ -65,6 +145,8 @@ fun SettingsScreen(
             passphrase = passphrase,
             remoteHost = remoteHost,
             remotePort = remotePort,
+            localPort = localPort,
+            privateKeyFileName = privateKeyFileName,
             connectAfterSave = connectAfterSave,
         )
     }
@@ -122,12 +204,60 @@ fun SettingsScreen(
             )
         }
         OutlinedTextField(
-            value = privateKey,
-            onValueChange = { privateKey = it },
+            value = privateKeyFileName.orEmpty(),
+            onValueChange = { },
+            readOnly = true,
             label = { Text("Chave privada (OpenSSH/PEM)") },
-            minLines = 3,
+            placeholder = { Text("Nenhum arquivo selecionado") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            OutlinedButton(
+                onClick = { keyFileLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = if (privateKey.isBlank()) {
+                        "Selecionar arquivo"
+                    } else {
+                        "Substituir arquivo"
+                    },
+                )
+            }
+            if (!privateKeyFileName.isNullOrBlank()) {
+                TextButton(
+                    onClick = {
+                        privateKey = ""
+                        privateKeyFileName = null
+                        keyFileError = null
+                    },
+                ) {
+                    Text(text = "Limpar")
+                }
+            }
+        }
+        Text(
+            text = if (privateKey.isBlank()) {
+                "Selecione o arquivo da chave privada. O conteúdo não é exibido por segurança."
+            } else {
+                "Chave carregada (${privateKey.length} caracteres)."
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        keyFileError?.let { msg ->
+            Text(
+                text = msg,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         OutlinedTextField(
             value = passphrase,
             onValueChange = { passphrase = it },
@@ -148,6 +278,17 @@ fun SettingsScreen(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(
+                value = localPort,
+                onValueChange = { localPort = it },
+                label = { Text("Porta local") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
                 value = remoteHost,
                 onValueChange = { remoteHost = it },
                 label = { Text("Host remoto") },
@@ -166,6 +307,14 @@ fun SettingsScreen(
                 modifier = Modifier.weight(1f),
             )
         }
+        Text(
+            text = "A API do Freqtrade ficará acessível em http://127.0.0.1:$localPort " +
+                "no dispositivo enquanto o túnel estiver ativo.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
 
         // Ações.
         Button(

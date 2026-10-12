@@ -3,7 +3,6 @@ package com.freqtradeui.android.security
 import android.content.Context
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 
 /**
  * Armazena as chaves de host SSH já confiadas pelo usuário (Trust On First
@@ -13,14 +12,13 @@ import androidx.security.crypto.MasterKey
  */
 class HostKeyStore(context: Context) {
 
+    // A partir de security-crypto 1.1.0, MasterKey está obsoleto: basta
+    // informar o alias da chave-mestre, que o Tink a cria no Android Keystore.
     private val prefs: android.content.SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(context.applicationContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
         EncryptedSharedPreferences.create(
-            context.applicationContext,
             PREFS_NAME,
-            masterKey,
+            MASTER_KEY_ALIAS,
+            context.applicationContext,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
@@ -50,5 +48,6 @@ class HostKeyStore(context: Context) {
 
     private companion object {
         const val PREFS_NAME = "freqtrade_hostkeys"
+        const val MASTER_KEY_ALIAS = "_androidx_security_master_key_"
     }
 }
