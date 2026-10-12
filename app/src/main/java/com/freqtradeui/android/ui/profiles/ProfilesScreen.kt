@@ -33,7 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,13 +43,15 @@ import androidx.compose.ui.unit.dp
 import com.freqtradeui.android.data.models.ConnectionProfile
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ssh.PendingHostKey
+import com.freqtradeui.android.ui.components.CompactTopAppBar
 import com.freqtradeui.android.ui.components.TunnelStatusChip
 
 /**
  * Tela principal de seleção de perfis.
  *
- * Não guarda estado local de conexão: exibe exatamente o que
- * [ProfilesUiState.snapshot] informa, que vem do serviço.
+ * Usa o header padrão do app ([CompactTopAppBar]) e não guarda estado local de
+ * conexão: exibe exatamente o que [ProfilesUiState.snapshot] informa, que vem
+ * do serviço.
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -72,8 +74,8 @@ fun ProfilesScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text("FreqtradeUI") },
+            CompactTopAppBar(
+                title = "FreqtradeUI",
                 actions = {
                     IconButton(onClick = onAddProfile) {
                         Icon(Icons.Filled.Add, contentDescription = "Adicionar perfil")
@@ -99,13 +101,6 @@ fun ProfilesScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item {
-                    Text(
-                        text = "Perfis de conexão",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
-                }
                 items(state.profiles, key = { it.id }) { profile ->
                     ProfileCard(
                         profile = profile,
