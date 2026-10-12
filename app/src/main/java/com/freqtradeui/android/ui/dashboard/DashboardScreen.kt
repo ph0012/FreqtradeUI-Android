@@ -22,8 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.freqtradeui.android.data.models.ConnectionState
+import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ui.components.ConnectionIndicator
 import com.freqtradeui.android.ui.components.EmptyState
 import com.freqtradeui.android.ui.components.PlaceholderValueCard
@@ -36,18 +35,18 @@ import com.freqtradeui.android.ui.theme.ProfitGreen
  * lucro/prejuízo como placeholders e a área de operações abertas em estado
  * vazio. Nenhum dado financeiro simulado é apresentado como real.
  *
- * @param onConfigureConnection callback para abrir a tela de configurações.
+ * @param onConfigureConnection callback para voltar à gestão de conexões.
  * @param modifier modificador de layout.
- * @param viewModel ViewModel do dashboard.
+ * @param viewModel ViewModel do dashboard, criado com a fábrica da aplicação.
  */
 @Composable
 fun DashboardScreen(
     onConfigureConnection: () -> Unit,
+    viewModel: DashboardViewModel,
     modifier: Modifier = Modifier,
-    viewModel: DashboardViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val connected = state.sshState == ConnectionState.Connected
+    val connected = state.snapshot.status == TunnelStatus.Connected
     val pending = state.pendingHostKey
 
     Column(
@@ -75,12 +74,14 @@ fun DashboardScreen(
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ConnectionIndicator(label = "SSH", state = state.sshState)
-            ConnectionIndicator(label = "API", state = state.apiState)
+            ConnectionIndicator(label = "SSH", status = state.snapshot.status)
+            // A API ainda não foi implementada: o indicador permanece
+            // desconectado de verdade, sem simular estado.
+            ConnectionIndicator(label = "API", status = TunnelStatus.Disconnected)
         }
 
         // Mensagem de status do túnel, quando houver.
-        state.statusMessage?.let { msg ->
+        state.snapshot.error?.let { msg ->
             Text(
                 text = msg,
                 style = MaterialTheme.typography.labelMedium,
@@ -109,7 +110,8 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Ações de conexão.
+        // Ações de conexão. Conectar é papel da tela de perfis (exige
+        // escolha explícita do perfil); o painel apenas encerra o túnel.
         if (connected) {
             OutlinedButton(
                 onClick = viewModel::disconnect,
@@ -118,12 +120,12 @@ fun DashboardScreen(
                 Text(text = "Desconectar túnel SSH")
             }
         } else {
-            Button(
-                onClick = viewModel::connect,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = "Conectar túnel SSH")
-            }
+            Text(
+                text = "O túnel não está ativo. Use a aba Conexões para " +
+                    "escolher o perfil e conectar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         TextButton(
             onClick = onConfigureConnection,

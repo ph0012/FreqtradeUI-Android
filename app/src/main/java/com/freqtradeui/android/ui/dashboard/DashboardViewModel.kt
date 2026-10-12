@@ -4,11 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.freqtradeui.android.data.models.ConnectionState
-import com.freqtradeui.android.security.SecureCredentialStore
+import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionSnapshot
+import com.freqtradeui.android.data.repository.ConnectionProfileRepository
+import com.freqtradeui.android.ssh.PendingHostKey
 import com.freqtradeui.android.ssh.SshTunnelManager
-import com.freqtradeui.android.ssh.TunnelState
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -18,81 +18,80 @@ import kotlinx.coroutines.launch
 /**
  * Estado imutável da tela de Dashboard.
  *
- * Os dados financeiros permanecem nulos: a integração com a API do Freqtrade
- * ainda não foi implementada. O estado do túnel SSH, no entanto, já é real e
- * refletido aqui — o usuário vê o resultado verdadeiro da tentativa de conexão.
+ * Os dados financeiros continuam nulos: a integração com a API do Freqtrade é
+ * a próxima etapa. O estado do túnel, porém, já é real — vem do serviço, não de
+ * uma cópia local otimista da UI.
  *
- * @param tunnel estado atual do túnel SSH.
- * @param api estado da API (placeholder: desconectado até a próxima etapa).
+ * @param profile perfil ao qual o túnel se refere, quando há um.
+ * @param snapshot estado real da conexão.
+ * @param pendingHostKey chave de host aguardando decisão TOFU, quando houver.
  */
 data class DashboardUiState(
-    val tunnel: TunnelState = TunnelState(),
-    val api: ConnectionState = ConnectionState.Disconnected,
-) {
-    val sshState: ConnectionState get() = tunnel.ssh
-    val apiState: ConnectionState get() = api
-    val pendingHostKey get() = tunnel.pendingHostKey
-    val statusMessage: String? get() = tunnel.message
-}
+    val profile: ConnectionProfile? = null,
+    val snapshot: ConnectionSnapshot = ConnectionSnapshot(),
+    val pendingHostKey: PendingHostKey? = null,
+)
 
 /**
  * ViewModel do Dashboard.
  *
- * Orquestra o túnel SSH e publica seu estado para a UI. A API segue como
- * placeholder (desconectada) até a próxima etapa. As credenciais são lidas do
- * armazenamento seguro apenas quando o usuário solicita a conexão.
+ * Expõe o perfil ativo e o estado do túnel para a UI. Não decide conectar:
+ * essa ação parte da tela de perfis, porque exige consentimento explícito.
  *
- * @param sshTunnelManager gerenciador do túnel SSH (compartilhado).
- * @param credentialStore armazenamento seguro de credenciais.
+ * @param repository acesso aos perfis salvos.
+ * @param tunnelManager gerenciador do túnel (compartilhado com o serviço).
  */
 class DashboardViewModel(
-    private val sshTunnelManager: SshTunnelManager,
-    private val credentialStore: SecureCredentialStore,
+    private val repository: ConnectionProfileRepository,
+    private val tunnelManager: SshTunnelManager,
 ) : ViewModel() {
 
-    private val apiState = MutableStateFlow(ConnectionState.Disconnected)
-
-    /** Estado de UI combinando o túnel real com o placeholder da API. */
+    /**
+     * Combina o perfil referenciado pelo túnel com o estado da conexão.
+     *
+     * Se o serviço não estiver ativo, o estado vem desconectado — mesmo que o
+     * perfil estivesse conectado antes de o app fechar. A UI nunca apresenta
+     * uma conexão que não existe.
+     */
     val uiState: StateFlow<DashboardUiState> =
-        combine(sshTunnelManager.state, apiState) { tunnel, api ->
-            DashboardUiState(tunnel = tunnel, api = api)
+        combine(repository.observeProfiles(), tunnelManager.state) { profiles, snapshot ->
+            val profile = snapshot.profileId?.let { id ->
+                profiles.firstOrNull { it.id == id }
+            }
+            DashboardUiState(
+                profile = profile,
+                snapshot = snapshot,
+                pendingHostKey = if (snapshot.hasPendingHostKey) {
+                    tunnelManager.pendingHostKey
+                } else {
+                    null
+                },
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = DashboardUiState(),
         )
 
-    /**
-     * Solicita a conexão do túnel SSH usando a configuração salva.
-     * Se não houver configuração, orienta o usuário a configurar a conexão.
-     */
-    fun connect() {
-        val config = credentialStore.loadConfig()
-        if (config == null) {
-            // Sem configuração salva: orienta sem tentar conectar.
-            return
-        }
-        viewModelScope.launch {
-            sshTunnelManager.connect(config)
-        }
-    }
-
-    /** Encerra o túnel SSH. */
+    /** Encerra o túnel ativo. */
     fun disconnect() {
-        sshTunnelManager.disconnect()
-        apiState.value = ConnectionState.Disconnected
+        tunnelManager.disconnect()
     }
 
-    /** Aprova a chave de host pendente (TOFU) e reconecta. */
-    fun approveHostKey() = sshTunnelManager.approveHostKey()
+    /** Aprova a chave de host pendente (TOFU), após conferência do usuário. */
+    fun approveHostKey() {
+        tunnelManager.approveHostKey()
+    }
 
-    /** Rejeita a chave de host pendente. */
-    fun rejectHostKey() = sshTunnelManager.rejectHostKey()
+    /** Rejeita a chave de host pendente e encerra a tentativa. */
+    fun rejectHostKey() {
+        tunnelManager.rejectHostKey()
+    }
 
     companion object {
         fun factory(
-            sshTunnelManager: SshTunnelManager,
-            credentialStore: SecureCredentialStore,
+            repository: ConnectionProfileRepository,
+            tunnelManager: SshTunnelManager,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(
@@ -102,8 +101,9 @@ class DashboardViewModel(
                 require(modelClass.isAssignableFrom(DashboardViewModel::class.java)) {
                     "ViewModel desconhecido: ${modelClass.name}"
                 }
-                return DashboardViewModel(sshTunnelManager, credentialStore) as T
+                return DashboardViewModel(repository, tunnelManager) as T
             }
         }
     }
 }
+

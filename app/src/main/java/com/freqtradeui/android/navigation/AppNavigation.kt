@@ -18,34 +18,49 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.freqtradeui.android.FreqtradeApplication
+import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ui.dashboard.DashboardScreen
-import com.freqtradeui.android.ui.settings.SettingsScreen
+import com.freqtradeui.android.ui.dashboard.DashboardViewModel
+import com.freqtradeui.android.ui.profiles.ProfileEditorScreen
+import com.freqtradeui.android.ui.profiles.ProfilesScreen
+import com.freqtradeui.android.ui.profiles.ProfilesViewModel
 import com.freqtradeui.android.ui.trades.TradesScreen
 
 /**
  * Rotas de navegação de nível superior.
  */
 sealed class Destination(val route: String, val label: String, val icon: ImageVector) {
-    data object Dashboard : Destination("dashboard", "Dashboard", Icons.Filled.Dashboard)
+    data object Profiles : Destination("profiles", "Conexões", Icons.Filled.Dashboard)
     data object Trades : Destination("trades", "Trades", Icons.AutoMirrored.Filled.ShowChart)
-    data object Settings : Destination("settings", "Configurações", Icons.Filled.Settings)
 }
 
+/** Rota do editor de perfis. */
+private const val ROUTE_PROFILE_EDITOR = "profile_editor?profileId={profileId}"
+private const val ARG_PROFILE_ID = "profileId"
+
+/** Rota do painel do perfil conectado. */
+private const val ROUTE_DASHBOARD = "dashboard"
+
 private val topDestinations = listOf(
-    Destination.Dashboard,
+    Destination.Profiles,
     Destination.Trades,
-    Destination.Settings,
 )
 
 /**
- * Esqueleto de navegação do aplicativo com barra inferior entre Dashboard,
- * Trades e Configurações.
+ * Esqueleto de navegação do aplicativo com barra inferior entre Conexões e
+ * Trades.
+ *
+ * A tela de conexões é a entrada do app: sem perfis cadastrados, ela apresenta
+ * a mensagem de boas-vindas em vez de um dashboard vazio.
  */
 @Composable
 fun AppNavigation(
@@ -55,8 +70,8 @@ fun AppNavigation(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    // Factory compartilhada pela aplicação: injeta o gerenciador de túnel e o
-    // armazenamento seguro nas telas que precisam deles.
+    // Factory compartilhada pela aplicação: injeta o repositório de perfis e o
+    // gerenciador do túnel nas telas.
     val context = LocalContext.current
     val application = context.applicationContext as FreqtradeApplication
     val viewModelFactory = remember(application) { application.viewModelFactory }
@@ -80,7 +95,9 @@ fun AppNavigation(
                                 restoreState = true
                             }
                         },
-                        icon = { Icon(destination.icon, contentDescription = destination.label) },
+                        icon = {
+                            Icon(destination.icon, contentDescription = destination.label)
+                        },
                         label = { Text(destination.label) },
                     )
                 }
@@ -89,23 +106,80 @@ fun AppNavigation(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Destination.Dashboard.route,
+            startDestination = Destination.Profiles.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Destination.Dashboard.route) {
-                DashboardScreen(
-                    onConfigureConnection = {
-                        navController.navigate(Destination.Settings.route)
+            composable(Destination.Profiles.route) {
+                val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                ProfilesScreen(
+                    state = state,
+                    onAddProfile = {
+                        navController.navigate("profile_editor?$ARG_PROFILE_ID=")
                     },
-                    viewModel = viewModel(factory = viewModelFactory),
+                    onEditProfile = { profile ->
+                        navController.navigate("profile_editor?$ARG_PROFILE_ID=${profile.id}")
+                    },
+                    onOpenPanel = { navController.navigate(ROUTE_DASHBOARD) },
+                    onConnect = vm::connect,
+                    onDisconnect = vm::disconnect,
+                    onRequestDelete = vm::requestDelete,
+                    onConfirmDelete = vm::confirmDelete,
+                    onCancelDelete = vm::cancelDelete,
+                    onSwitchConfirm = { vm.confirmSwitch() },
+                    onSwitchCancel = vm::cancelSwitch,
+                    onApproveHostKey = vm::approveHostKey,
+                    onRejectHostKey = vm::rejectHostKey,
                 )
             }
             composable(Destination.Trades.route) {
                 TradesScreen()
             }
-            composable(Destination.Settings.route) {
-                SettingsScreen(viewModel = viewModel(factory = viewModelFactory))
+            // Painel do perfil conectado: só é alcançado pelo card conectado.
+            composable(ROUTE_DASHBOARD) {
+                val vm: DashboardViewModel = viewModel(factory = viewModelFactory)
+                DashboardScreen(
+                    onConfigureConnection = {
+                        navController.navigate(Destination.Profiles.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    viewModel = vm,
+                )
+            }
+            composable(
+                route = ROUTE_PROFILE_EDITOR,
+                arguments = listOf(
+                    navArgument(ARG_PROFILE_ID) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                ),
+            ) { entry ->
+                val profileId = entry.arguments
+                    ?.getString(ARG_PROFILE_ID)
+                    ?.takeIf { it.isNotBlank() }
+                val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
+                val state by vm.uiState.collectAsStateWithLifecycle()
+                // Enquanto o perfil tiver túnel em andamento, o formulário fica
+                // bloqueado: alterações silenciosas derrubariam a conexão.
+                val tunnelActiveForProfile = profileId != null &&
+                    state.snapshot.refersTo(profileId) &&
+                    (state.snapshot.status == TunnelStatus.Connecting ||
+                        state.snapshot.status.isActive)
+                ProfileEditorScreen(
+                    profileId = profileId,
+                    viewModel = vm,
+                    isConnected = tunnelActiveForProfile,
+                    onDone = { navController.popBackStack() },
+                    onCancel = { navController.popBackStack() },
+                )
             }
         }
     }
 }
+

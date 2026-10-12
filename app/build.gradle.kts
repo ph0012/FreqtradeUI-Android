@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.jsch)
 
     implementation(platform(libs.androidx.compose.bom))

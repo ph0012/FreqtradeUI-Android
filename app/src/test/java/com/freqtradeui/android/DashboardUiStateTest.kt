@@ -1,10 +1,9 @@
 package com.freqtradeui.android
 
-import com.freqtradeui.android.data.models.ConnectionState
-import com.freqtradeui.android.data.models.ConnectionStatus
+import com.freqtradeui.android.data.models.ConnectionSnapshot
+import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.security.HostKeyFingerprint
 import com.freqtradeui.android.ui.dashboard.DashboardUiState
-import com.freqtradeui.android.ssh.TunnelState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,35 +11,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Testes de unidade do estado da UI.
+ * Testes de unidade do estado da UI do Dashboard.
  *
  * Garantem que, sem conexão estabelecida, o estado parte desconectado e sem
- * dados financeiros — a UI nunca deve exibir valores simulados como reais.
+ * dados financeiros — a UI nunca deve exibir valores simulados como reais, nem
+ * apresentar um perfil como conectado quando o serviço está parado.
  */
 class DashboardUiStateTest {
 
     @Test
-    fun estadoInicial_estaDesconectado() {
+    fun estadoInicial_estaDesconectadoSemPerfil() {
         val state = DashboardUiState()
-        assertEquals(ConnectionState.Disconnected, state.sshState)
-        assertEquals(ConnectionState.Disconnected, state.apiState)
+
+        assertNull(state.profile)
         assertNull(state.pendingHostKey)
-        assertNull(state.statusMessage)
+        assertEquals(TunnelStatus.Disconnected, state.snapshot.status)
+        assertNull(state.snapshot.profileId)
+        assertNull(state.snapshot.localPort)
+        assertNull(state.snapshot.error)
     }
 
     @Test
-    fun statusConexao_padraoDesconectado() {
-        val status = ConnectionStatus()
-        assertEquals(ConnectionState.Disconnected, status.ssh)
-        assertEquals(ConnectionState.Disconnected, status.api)
-    }
+    fun snapshotInicial_semTunelNemDecisaoPendente() {
+        val snapshot = ConnectionSnapshot()
 
-    @Test
-    fun tunelInicial_semPortaLocal() {
-        val tunnel = TunnelState()
-        assertEquals(ConnectionState.Disconnected, tunnel.ssh)
-        assertNull(tunnel.localPort)
-        assertNull(tunnel.pendingHostKey)
+        assertEquals(TunnelStatus.Disconnected, snapshot.status)
+        assertNull(snapshot.localPort)
+        assertNull(snapshot.pendingHostKey)
+        assertFalse(snapshot.hasPendingHostKey)
+        assertFalse(snapshot.isTerminalError)
     }
 
     // --- Fingerprint de chave de host (base da verificação TOFU) ---
@@ -81,5 +80,19 @@ class DashboardUiStateTest {
         assertTrue(HostKeyFingerprint.constantTimeEquals(a, byteArrayOf(1, 2, 3)))
         assertFalse(HostKeyFingerprint.constantTimeEquals(a, byteArrayOf(1, 2, 4)))
     }
+
+    @Test
+    fun perfilAtivo_refleteApenasOSnapshot() {
+        // O estado só "refere-se" a um perfil quando o snapshot aponta para ele.
+        val snapshot = ConnectionSnapshot(
+            status = TunnelStatus.Connected,
+            profileId = "abc",
+            localPort = 18080,
+        )
+        assertTrue(snapshot.refersTo("abc"))
+        assertFalse(snapshot.refersTo("xyz"))
+        assertFalse(snapshot.refersTo(null))
+    }
 }
+
 

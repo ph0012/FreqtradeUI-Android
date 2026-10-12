@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Icone da notificacao do servico. Monocromatico: o sistema o tinge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,3C7.31,3 2.72,4.07 0.1,5.6L0.1,7.5C2.71,6 7.3,4.95 12,4.95C16.7,4.95 21.29,6 23.9,7.5L23.9,5.6C21.28,4.07 16.69,3 12,3Z M23.9,11.6V9.7C22.28,8.75 18.94,7.9 12,7.9C5.06,7.9 1.72,8.75 0.1,9.7V11.6C1.72,10.65 5.06,9.8 12,9.8C18.94,9.8 22.28,10.65 23.9,11.6Z M23.9,15.6V13.7C22.28,12.75 18.94,11.9 12,11.9C5.06,11.9 1.72,12.75 0.1,13.7V15.6C1.72,14.65 5.06,13.8 12,13.8C18.94,13.8 22.28,14.65 23.9,15.6Z M23.9,19.6V17.7C22.28,16.75 18.94,15.9 12,15.9C5.06,15.9 1.72,16.75 0.1,17.7V19.6C1.72,18.65 5.06,17.8 12,17.8C18.94,17.8 22.28,18.65 23.9,19.6Z" />
+</vector>

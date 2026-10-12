@@ -1,50 +1,88 @@
 package com.freqtradeui.android
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.freqtradeui.android.data.repository.ConnectionProfileRepository
+import com.freqtradeui.android.data.repository.DataStoreProfileStorage
 import com.freqtradeui.android.security.HostKeyStore
-import com.freqtradeui.android.security.SecureCredentialStore
+import com.freqtradeui.android.security.SecureSecretStore
+import com.freqtradeui.android.ssh.SshConnectionService
 import com.freqtradeui.android.ssh.SshTunnelManager
 import com.freqtradeui.android.ui.dashboard.DashboardViewModel
-import com.freqtradeui.android.ui.settings.SettingsViewModel
+import com.freqtradeui.android.ui.profiles.ProfilesViewModel
 
 /**
  * Ponto de composição das dependências de longa duração.
  *
- * Mantém instâncias únicas do armazenamento seguro de credenciais, do
- * repositório de chaves de host e do gerenciador do túnel SSH. Esses objetos
- * sobrevivem a mudanças de configuração da Activity, preservando o estado do
- * túnel entre telas. Sem frameworks de injeção: composição manual e explícita.
+ * Agrupa em [container] o que é compartilhado entre UI e serviço: o
+ * gerenciador do túnel, os repositórios e o cofre de segredos. Composição
+ * manual e explícita, sem framework de injeção.
  */
 class FreqtradeApplication : Application() {
 
-    /** Armazenamento criptografado de credenciais SSH (EncryptedSharedPreferences). */
-    val credentialStore: SecureCredentialStore by lazy { SecureCredentialStore(this) }
-
-    /** Repositório de chaves de host confiáveis (TOFU). */
-    val hostKeyStore: HostKeyStore by lazy { HostKeyStore(this) }
-
-    /** Gerenciador do túnel SSH local, compartilhado por toda a UI. */
-    val sshTunnelManager: SshTunnelManager by lazy { SshTunnelManager(hostKeyStore) }
+    override fun onCreate() {
+        super.onCreate()
+        appContext = applicationContext
+        instance = this
+    }
 
     /**
-     * Fábrica de ViewModels usada pelas telas. Centraliza a criação para que
-     * Dashboard e Configurações compartilhem o mesmo gerenciador de túnel e o
-     * mesmo armazenamento de credenciais.
+     * Dependências compartilhadas. O gerenciador do túnel é uma instância só,
+     * usada tanto pela UI quanto pelo serviço — assim o estado exibido é o
+     * mesmo que o serviço mantém.
      */
+    val container: AppContainer by lazy { AppContainer(applicationContext) }
+
+    /** Fábrica de ViewModels das telas. */
     val viewModelFactory: ViewModelProvider.Factory by lazy {
         viewModelFactory {
-            initializer { DashboardViewModel(sshTunnelManager, credentialStore) }
-            initializer { SettingsViewModel(credentialStore, sshTunnelManager) }
+            initializer {
+                ProfilesViewModel(container.profileRepository, container.tunnelManager)
+            }
+            initializer {
+                DashboardViewModel(container.profileRepository, container.tunnelManager)
+            }
         }
     }
 
     override fun onTerminate() {
-        // onTerminate não roda em dispositivos reais, mas garante limpeza em
-        // cenários de teste/emulador.
-        sshTunnelManager.shutdown()
+        // Não roda em dispositivos reais, mas limpa em testes e emuladores.
+        container.tunnelManager.shutdown()
         super.onTerminate()
     }
+
+    companion object {
+        /** Contexto de aplicação, usado pelo serviço para criar o túnel. */
+        lateinit var appContext: Context
+            private set
+
+        /** Instância em execução, ou `null` se o processo ainda não subiu. */
+        var instance: FreqtradeApplication? = null
+            private set
+    }
 }
+
+/**
+ * Agrupamento das dependências compartilhadas.
+ *
+ * @param tunnelManager gerenciador do túnel SSH (instância única).
+ * @param profileRepository acesso a perfis e segredos.
+ */
+class AppContainer(context: Context) {
+    val tunnelManager: SshTunnelManager = SshConnectionService.tunnelManager
+
+    val profileRepository: ConnectionProfileRepository = ConnectionProfileRepository(
+        storage = DataStoreProfileStorage(context),
+        secrets = SecureSecretStore(context),
+    )
+
+    /**
+     * Chaves de host confiáveis. A mesma instância do gerenciador de túnel,
+     * para não abrir duas vezes o arquivo cifrado.
+     */
+    val hostKeyStore: HostKeyStore = SshConnectionService.hostKeyStore
+}
+

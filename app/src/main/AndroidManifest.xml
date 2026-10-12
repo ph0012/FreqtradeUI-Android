@@ -1,9 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Única permissão necessária: comunicação de rede para o túnel SSH
-         local e para a API do Freqtrade via loopback. -->
+    <!-- Única permissão de rede: túnel SSH local e API via loopback. -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Túnel SSH: foreground service iniciado só por ação explícita do
+         usuário, para o túnel sobreviver ao fechamento da interface.
+         dataSync: enquadra transferência de dados entre o dispositivo e o
+         servidor do usuário, sem prometer mídia ou localização. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Necessária para exibir a notificação do serviço em primeiro plano
+         (Android 13+). O app funciona sem ela, mas aí não há notificação
+         persistente e o usuário perde a indicação do estado do túnel. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Usado apenas para informar que a rede caiu e antecipar a reconexão.
+         Não é obrigatório: sem ele o keepalive SSH detecta a queda. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- NÃO declaramos RECEIVE_BOOT_COMPLETED: reconectar sozinho depois de
+         reiniciar exigiria iniciar um serviço em background sem interação do
+         usuário, o que o Android restringe e seria conexão silenciosa. -->
 
     <application
         android:name=".FreqtradeApplication"
@@ -26,6 +45,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Mantém o túnel SSH ativo fora da interface. Não exportado: só
+             este app pode iniciá-lo ou interrompê-lo pela notificação.
+             startForeground() sempre segue uma ação explícita do usuário. -->
+        <service
+            android:name=".ssh.SshConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
     </application>
 
 </manifest>

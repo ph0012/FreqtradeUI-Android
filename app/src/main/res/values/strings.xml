@@ -1,4 +1,31 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FreqtradeUI</string>
+
+    <!-- Notificacao do servico de tunel SSH -->
+    <string name="ssh_channel_name">Tunel SSH</string>
+    <string name="ssh_channel_description">Mantem a conexao segura com sua VPS ativa.</string>
+    <string name="ssh_notification_title">Tunel SSH</string>
+    <string name="ssh_notification_profile">%1$s</string>
+    <string name="ssh_action_disconnect">Desconectar</string>
+    <string name="ssh_state_connecting">Conectando…</string>
+    <string name="ssh_state_connected">Conectado</string>
+    <string name="ssh_state_connected_tunnel">Conectado - porta local %1$d</string>
+    <string name="ssh_state_reconnecting">Reconectando em %1$d s…</string>
+    <string name="ssh_state_stopping">Encerrando…</string>
+    <string name="ssh_state_disconnected">Desconectado</string>
+    <string name="ssh_state_error">Falha na conexao</string>
+
+    <!-- Perfis de conexao -->
+    <string name="profiles_title">Conexoes</string>
+    <string name="profiles_empty_title">Bem-vindo ao FreqtradeUI</string>
+    <string name="profiles_empty_text">Configure sua primeira conexao SSH para acessar sua VPS com seguranca. Voce podera cadastrar varias conexoes e escolher qual deseja utilizar.</string>
+    <string name="profiles_empty_note">O tunel SSH acessa a API do Freqtrade pela propria VPS, sem expor a porta da API publicamente.</string>
+    <string name="profiles_action_add">Nova conexao</string>
+    <string name="profiles_action_connect">Conectar</string>
+    <string name="profiles_action_disconnect">Desconectar</string>
+    <string name="profiles_action_edit">Editar</string>
+    <string name="profiles_action_delete">Excluir</string>
+    <string name="profiles_action_open">Abrir painel</string>
+    <string name="profiles_action_first">Configurar primeira conexao</string>
 </resources>
