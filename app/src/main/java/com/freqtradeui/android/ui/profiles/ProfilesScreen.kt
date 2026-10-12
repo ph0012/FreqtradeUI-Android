@@ -53,7 +53,6 @@ import com.freqtradeui.android.ui.components.TunnelStatusChip
  * conexão: exibe exatamente o que [ProfilesUiState.snapshot] informa, que vem
  * do serviço.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfilesScreen(
     state: ProfilesUiState,

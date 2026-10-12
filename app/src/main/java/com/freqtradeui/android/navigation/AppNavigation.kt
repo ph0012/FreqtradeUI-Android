@@ -1,9 +1,7 @@
 package com.freqtradeui.android.navigation
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -64,75 +62,75 @@ fun AppNavigation(
     val application = context.applicationContext as FreqtradeApplication
     val viewModelFactory = remember(application) { application.viewModelFactory }
 
-    Scaffold(
+    // Sem Scaffold externo: cada tela tem o proprio, com um unico responsavel
+    // pelos insets. Um Scaffold aqui, sem topBar, empurrava o conteudo pela
+    // altura da barra de status e o header da tela somava o mesmo inset outra
+    // vez — o topo ficava com o dobro do espaco.
+    NavHost(
+        navController = navController,
+        startDestination = Destination.Profiles.route,
         modifier = modifier,
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Destination.Profiles.route,
-            modifier = Modifier.padding(innerPadding),
-        ) {
-            composable(Destination.Profiles.route) {
-                val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                ProfilesScreen(
-                    state = state,
-                    onAddProfile = {
-                        navController.navigate("profile_editor?$ARG_PROFILE_ID=")
-                    },
-                    onEditProfile = { profile ->
-                        navController.navigate("profile_editor?$ARG_PROFILE_ID=${profile.id}")
-                    },
-                    onOpenPanel = { navController.navigate(ROUTE_DASHBOARD) },
-                    onConnect = vm::connect,
-                    onDisconnect = vm::disconnect,
-                    onRequestDelete = vm::requestDelete,
-                    onConfirmDelete = vm::confirmDelete,
-                    onCancelDelete = vm::cancelDelete,
-                    onSwitchConfirm = { vm.confirmSwitch() },
-                    onSwitchCancel = vm::cancelSwitch,
-                    onApproveHostKey = vm::approveHostKey,
-                    onRejectHostKey = vm::rejectHostKey,
-                )
-            }
-            // Painel do perfil conectado: só é alcançado pelo card conectado,
-            // com retorno próprio na barra superior.
-            composable(ROUTE_DASHBOARD) {
-                val vm: DashboardViewModel = viewModel(factory = viewModelFactory)
-                DashboardScreen(
-                    viewModel = vm,
-                    // Volta pela pilha: a lista de perfis está logo abaixo.
-                    onBack = { navController.popBackStack() },
-                )
-            }
-            composable(
-                route = ROUTE_PROFILE_EDITOR,
-                arguments = listOf(
-                    navArgument(ARG_PROFILE_ID) {
-                        type = NavType.StringType
-                        defaultValue = ""
-                    },
-                ),
-            ) { entry ->
-                val profileId = entry.arguments
-                    ?.getString(ARG_PROFILE_ID)
-                    ?.takeIf { it.isNotBlank() }
-                val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
-                val state by vm.uiState.collectAsStateWithLifecycle()
-                // Enquanto o perfil tiver túnel em andamento, o formulário fica
-                // bloqueado: alterações silenciosas derrubariam a conexão.
-                val tunnelActiveForProfile = profileId != null &&
-                    state.snapshot.refersTo(profileId) &&
-                    (state.snapshot.status == TunnelStatus.Connecting ||
-                        state.snapshot.status.isActive)
-                ProfileEditorScreen(
-                    profileId = profileId,
-                    viewModel = vm,
-                    isConnected = tunnelActiveForProfile,
-                    onDone = { navController.popBackStack() },
-                    onCancel = { navController.popBackStack() },
-                )
-            }
+) {
+        composable(Destination.Profiles.route) {
+            val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            ProfilesScreen(
+                state = state,
+                onAddProfile = {
+                    navController.navigate("profile_editor?$ARG_PROFILE_ID=")
+                },
+                onEditProfile = { profile ->
+                    navController.navigate("profile_editor?$ARG_PROFILE_ID=${profile.id}")
+                },
+                onOpenPanel = { navController.navigate(ROUTE_DASHBOARD) },
+                onConnect = vm::connect,
+                onDisconnect = vm::disconnect,
+                onRequestDelete = vm::requestDelete,
+                onConfirmDelete = vm::confirmDelete,
+                onCancelDelete = vm::cancelDelete,
+                onSwitchConfirm = { vm.confirmSwitch() },
+                onSwitchCancel = vm::cancelSwitch,
+                onApproveHostKey = vm::approveHostKey,
+                onRejectHostKey = vm::rejectHostKey,
+            )
+        }
+        // Painel do perfil conectado: só é alcançado pelo card conectado,
+        // com retorno próprio na barra superior.
+        composable(ROUTE_DASHBOARD) {
+            val vm: DashboardViewModel = viewModel(factory = viewModelFactory)
+            DashboardScreen(
+                viewModel = vm,
+                // Volta pela pilha: a lista de perfis está logo abaixo.
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = ROUTE_PROFILE_EDITOR,
+            arguments = listOf(
+                navArgument(ARG_PROFILE_ID) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            val profileId = entry.arguments
+                ?.getString(ARG_PROFILE_ID)
+                ?.takeIf { it.isNotBlank() }
+            val vm: ProfilesViewModel = viewModel(factory = viewModelFactory)
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            // Enquanto o perfil tiver túnel em andamento, o formulário fica
+            // bloqueado: alterações silenciosas derrubariam a conexão.
+            val tunnelActiveForProfile = profileId != null &&
+                state.snapshot.refersTo(profileId) &&
+                (state.snapshot.status == TunnelStatus.Connecting ||
+                    state.snapshot.status.isActive)
+            ProfileEditorScreen(
+                profileId = profileId,
+                viewModel = vm,
+                isConnected = tunnelActiveForProfile,
+                onDone = { navController.popBackStack() },
+                onCancel = { navController.popBackStack() },
+            )
         }
     }
 }
