@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,7 +43,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 /**
  * Editor de perfis: cadastro e edicao pelo mesmo formulario.
  *
@@ -74,7 +77,12 @@ fun ProfileEditorScreen(
         // Aguarda o carregamento: evita exibir formulario vazio por engano.
         Scaffold(topBar = { TopAppBar(title = { Text("Editar perfil") }) }) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+                modifier = Modifier.fillMaxSize()
+                    .padding(padding)
+                    .imePadding()
+                    .windowInsetsPadding(WindowInsets.ime)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text("Carregando perfil...", style = MaterialTheme.typography.bodyLarge)
@@ -203,6 +211,7 @@ private fun ProfileEditorForm(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
