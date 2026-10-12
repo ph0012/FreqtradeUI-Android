@@ -9,12 +9,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,23 +43,43 @@ import com.freqtradeui.android.ui.theme.ProfitGreen
  * vazio. Nenhum dado financeiro simulado é apresentado como real.
  *
  * @param onConfigureConnection callback para voltar à gestão de conexões.
- * @param modifier modificador de layout.
  * @param viewModel ViewModel do dashboard, criado com a fábrica da aplicação.
+ * @param onBack volta para a lista de perfis.
+ * @param modifier modificador de layout.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     onConfigureConnection: () -> Unit,
     viewModel: DashboardViewModel,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val connected = state.snapshot.status == TunnelStatus.Connected
     val pending = state.pendingHostKey
 
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            TopAppBar(
+                title = { Text(state.profile?.name ?: "Painel") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Voltar para a lista de perfis",
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .padding(innerPadding)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -133,6 +160,7 @@ fun DashboardScreen(
         ) {
             Text(text = "Configurar conexão")
         }
+    }
     }
 
     // Diálogo de decisão da chave de host (Trust On First Use).

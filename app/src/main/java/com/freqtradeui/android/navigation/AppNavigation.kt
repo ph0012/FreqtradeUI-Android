@@ -79,7 +79,13 @@ fun AppNavigation(
     Scaffold(
         modifier = modifier,
         bottomBar = {
-            NavigationBar {
+            // Barra inferior só nas telas de topo: painel e editor têm suas
+            // próprias barras superiores com retorno explícito, então a aba
+            // "Conexões" não fica lá como caminho ambíguo de volta.
+            val route = currentDestination?.route
+            val onTopLevel = topDestinations.any { it.route == route }
+            if (onTopLevel) {
+                NavigationBar {
                 topDestinations.forEach { destination ->
                     val selected = currentDestination?.hierarchy?.any {
                         it.route == destination.route
@@ -100,6 +106,7 @@ fun AppNavigation(
                         },
                         label = { Text(destination.label) },
                     )
+                }
                 }
             }
         },
@@ -149,6 +156,8 @@ fun AppNavigation(
                         }
                     },
                     viewModel = vm,
+                    // Volta pela pilha: a lista de perfis está logo abaixo.
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(
