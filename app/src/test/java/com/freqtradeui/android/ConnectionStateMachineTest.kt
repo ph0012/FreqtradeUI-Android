@@ -180,4 +180,22 @@ class ConnectionStateMachineTest {
         assertEquals(ConnectionEffect.None, t.effect)
         assertEquals(TunnelStatus.Disconnected, t.state.status)
     }
+
+    @Test
+    fun novoCicloAposLimpeza_conectaDeNovo() {
+        // Regressão do bug "Encerrando" travado: após Disconnect + CleanupDone
+        // a máquina precisa aceitar um novo Connect limpo.
+        val m = machine()
+        m.reduce(ConnectionEvent.Connect("p1"))
+        m.reduce(ConnectionEvent.Disconnect)
+        val cleanup = m.reduce(ConnectionEvent.CleanupDone)
+        assertEquals(TunnelStatus.Disconnected, cleanup.state.status)
+        assertNull(cleanup.state.profileId)
+
+        val t = m.reduce(ConnectionEvent.Connect("p2"))
+
+        assertEquals(TunnelStatus.Connecting, t.state.status)
+        assertEquals("p2", t.state.profileId)
+        assertEquals(ConnectionEffect.OpenTunnel, t.effect)
+    }
 }

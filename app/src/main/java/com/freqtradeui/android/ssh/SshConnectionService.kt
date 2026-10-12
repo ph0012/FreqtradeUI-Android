@@ -87,6 +87,7 @@ class SshConnectionService : Service() {
             observing = true
             serviceScope.launch {
                 var lastConnected = false
+                var sawSession = false
                 tunnelManager.state.collect { snapshot ->
                     _snapshot.value = snapshot
                     updateNotification(snapshot)
@@ -102,6 +103,27 @@ class SshConnectionService : Service() {
                         }
                     }
                     lastConnected = connected
+
+                    // O serviço vive enquanto há túnel, tentativa ou decisão
+                    // TOFU pendente; ao chegar a um Disconnected limpo após
+                    // ter estado ativo, encerra a si próprio e remove a
+                    // notificação — sem deixar "Encerrando/Desconectado"
+                    // pendurado para sempre.
+                    if (snapshot.status != TunnelStatus.Disconnected ||
+                        snapshot.hasPendingHostKey
+                    ) {
+                        sawSession = true
+                    }
+                    if (sawSession &&
+                        snapshot.status == TunnelStatus.Disconnected &&
+                        !snapshot.hasPendingHostKey
+                    ) {
+                        ServiceCompat.stopForeground(
+                            this@SshConnectionService,
+                            ServiceCompat.STOP_FOREGROUND_REMOVE,
+                        )
+                        stopSelf()
+                    }
                 }
             }
         }

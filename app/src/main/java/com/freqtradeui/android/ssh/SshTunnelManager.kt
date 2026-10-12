@@ -18,7 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -137,13 +136,20 @@ class SshTunnelManager(
         publish(machine.reduce(ConnectionEvent.Disconnect))
     }
 
-    /** Libera todos os recursos; usado no encerramento do processo. */
+    /**
+     * Libera todos os recursos; usado no encerramento do processo ou do
+     * serviço.
+     *
+     * **Não cancela o [scope]**: ele pertence ao gerenciador singleton do
+     * processo. Cancelá-lo tornaria o app permanentemente inoperante — nenhuma
+     * nova conexão começaria — assim que o serviço fosse destruído e
+     * recriado.
+     */
     fun shutdown() {
         loopJob?.cancel()
         retryJob?.cancel()
         monitorJob?.cancel()
         closeResources()
-        scope.cancel()
     }
 
     /**
@@ -203,6 +209,16 @@ class SshTunnelManager(
                 // Chave pendente: a maquina ja saiu para Disconnected.
                 if (pending != null) {
                     publishPendingHostKey()
+                    return@launch
+                }
+
+                // Desconexao solicitada durante o handshake: o connect() do
+                // JSch e bloqueante e nao ve o cancelamento da corrotina —
+                // sem este guarda, publicaria Connected apos o usuario pedir
+                // para parar.
+                if (machine.state.status != TunnelStatus.Connecting) {
+                    Log.i(TAG, "Conexao cancelada durante o handshake")
+                    closeResources()
                     return@launch
                 }
 
@@ -328,6 +344,12 @@ class SshTunnelManager(
             com.freqtradeui.android.data.models.ConnectionEffect.CloseTunnel -> {
                 monitorJob?.cancel()
                 closeResources()
+                // Só sai de Stopping: o estado Error (falha permanente) e a
+                // chave pendente (decisão TOFU) preservam seus estados — sem
+                // isso a UI ficaria presa em "Encerrando" para sempre.
+                if (machine.state.status == TunnelStatus.Stopping) {
+                    publish(machine.reduce(ConnectionEvent.CleanupDone))
+                }
             }
 
             com.freqtradeui.android.data.models.ConnectionEffect.StopService -> {
