@@ -81,7 +81,8 @@ fun DashboardScreen(
             ConnectionCard(
                 tunnelStatus = state.snapshot.status,
                 apiError = state.error,
-                apiReady = tunnelConnected && state.hasCredentials,
+                apiReady = tunnelConnected && state.hasCredentials &&
+                    state.error == null && state.lastUpdatedAt != null,
                 apiBaseUrl = state.apiBaseUrl,
                 lastUpdatedAt = state.lastUpdatedAt,
             )
@@ -160,6 +161,14 @@ private fun ConnectionCard(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = apiColor,
+                )
+            }
+
+            apiError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LossRed,
                 )
             }
 

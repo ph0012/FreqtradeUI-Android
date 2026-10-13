@@ -12,7 +12,6 @@ import com.freqtradeui.android.data.models.CountResponse
 import com.freqtradeui.android.data.models.DailyProfitItem
 import com.freqtradeui.android.data.models.HealthResponse
 import com.freqtradeui.android.data.models.LogResponse
-import com.freqtradeui.android.data.models.LoginRequest
 import com.freqtradeui.android.data.models.PerformanceResponse
 import com.freqtradeui.android.data.models.PingResponse
 import com.freqtradeui.android.data.models.ProfitResponse
@@ -21,6 +20,7 @@ import com.freqtradeui.android.data.models.TradesResponse
 import com.freqtradeui.android.data.models.VersionResponse
 import com.freqtradeui.android.data.models.WhitelistResponse
 import com.squareup.moshi.JsonDataException
+import okhttp3.Credentials
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -118,7 +118,7 @@ class FreqtradeRepository(
             ?: return ApiResult.Unauthorized("Credenciais da API não configuradas.")
         return try {
             val response = service(profile)
-                .login(LoginRequest(stored.username, stored.password))
+                .login(Credentials.basic(stored.username, stored.password))
             if (response.accessToken.isBlank()) {
                 ApiResult.Unauthorized("A API respondeu sem token de acesso.")
             } else {

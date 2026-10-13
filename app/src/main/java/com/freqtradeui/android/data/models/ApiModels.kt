@@ -51,12 +51,6 @@ data class ApiAuthTokens(
     }
 }
 
-/** Corpo de `POST /token/login`. */
-data class LoginRequest(
-    @Json(name = "username") val username: String,
-    @Json(name = "password") val password: String,
-)
-
 /** Resposta de `GET /ping`. */
 data class PingResponse(
     @Json(name = "status") val status: String,

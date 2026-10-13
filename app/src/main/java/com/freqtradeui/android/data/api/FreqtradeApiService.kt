@@ -7,7 +7,6 @@ import com.freqtradeui.android.data.models.CountResponse
 import com.freqtradeui.android.data.models.DailyProfitItem
 import com.freqtradeui.android.data.models.HealthResponse
 import com.freqtradeui.android.data.models.LogResponse
-import com.freqtradeui.android.data.models.LoginRequest
 import com.freqtradeui.android.data.models.PerformanceResponse
 import com.freqtradeui.android.data.models.PingResponse
 import com.freqtradeui.android.data.models.ProfitResponse
@@ -15,8 +14,8 @@ import com.freqtradeui.android.data.models.StatusResponse
 import com.freqtradeui.android.data.models.TradesResponse
 import com.freqtradeui.android.data.models.VersionResponse
 import com.freqtradeui.android.data.models.WhitelistResponse
-import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -112,7 +111,7 @@ interface FreqtradeApiService {
 
     /** Autentica e devolve os tokens JWT. */
     @POST("token/login")
-    suspend fun login(@Body request: LoginRequest): ApiAuthTokens
+    suspend fun login(@Header("Authorization") authorization: String): ApiAuthTokens
 
     companion object {
         /** Quantidade padrão de dias em `/daily`. */

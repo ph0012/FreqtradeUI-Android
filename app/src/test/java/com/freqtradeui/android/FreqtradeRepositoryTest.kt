@@ -9,6 +9,7 @@ import com.freqtradeui.android.data.repository.FreqtradeRepository
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.Credentials
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -82,6 +83,11 @@ class FreqtradeRepositoryTest {
         val loginRequest = server.takeRequest()
         assertEquals("POST", loginRequest.method)
         assertTrue(loginRequest.path!!.endsWith("/api/v1/token/login"))
+        assertEquals(
+            Credentials.basic("api-user", "api-pass"),
+            loginRequest.getHeader("Authorization"),
+        )
+        assertEquals("", loginRequest.body.readUtf8())
 
         val guarded = server.takeRequest()
         assertTrue(guarded.path!!.endsWith("/api/v1/version"))
