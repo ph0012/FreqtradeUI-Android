@@ -3,6 +3,7 @@ package com.freqtradeui.android.ui.profiles
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.freqtradeui.android.FreqtradeApplication
+import com.freqtradeui.android.data.models.ApiResult
 import com.freqtradeui.android.data.models.ConnectionProfile
 import com.freqtradeui.android.data.models.ConnectionSnapshot
 import com.freqtradeui.android.data.models.ProfileSecret
@@ -12,6 +13,9 @@ import com.freqtradeui.android.ssh.PendingHostKey
 import com.freqtradeui.android.ssh.SshConnectionService
 import com.freqtradeui.android.data.repository.FreqtradeRepository
 import com.freqtradeui.android.ssh.SshTunnelManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,12 +44,22 @@ data class ProfilesUiState(
     val deleteTarget: ConnectionProfile? = null,
     val message: String? = null,
     val pendingHostKey: PendingHostKey? = null,
+    val startupComplete: Boolean = false,
+    val restoringSession: Boolean = false,
+    val startupMessage: String? = null,
+    val restoredProfileId: String? = null,
 ) {
     /** `true` quando não há perfis salvos (dispara a tela de boas-vindas). */
     val isEmpty: Boolean get() = profiles.isEmpty() && !loading
 
     /** `true` quando há túnel em andamento para algum perfil. */
-    val hasActiveTunnel: Boolean get() = snapshot.status.isActive
+    val hasActiveTunnel: Boolean
+        get() = snapshot.status in setOf(
+            TunnelStatus.Connecting,
+            TunnelStatus.Connected,
+            TunnelStatus.Reconnecting,
+            TunnelStatus.Stopping,
+        )
 
     /** Perfil referenciado pelo snapshot, se ainda existir na lista. */
     val activeProfile: ConnectionProfile?
@@ -97,6 +111,7 @@ class ProfilesViewModel(
 
     /** Decisões locais pendentes (confirmações), separadas do estado real. */
     private val local = MutableStateFlow(LocalState())
+    private var restoreJob: Job? = null
 
     /** Estado combinado: perfis + estado real do túnel. */
     val uiState: StateFlow<ProfilesUiState> = combine(
@@ -116,6 +131,10 @@ class ProfilesViewModel(
             },
             message = loc.message,
             pendingHostKey = if (snapshot.hasPendingHostKey) tunnelManager.pendingHostKey else null,
+            startupComplete = loc.startupComplete,
+            restoringSession = loc.restoringSession,
+            startupMessage = loc.startupMessage,
+            restoredProfileId = loc.restoredProfileId,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -133,6 +152,94 @@ class ProfilesViewModel(
         val state = uiState.value
         if (state.hasActiveTunnel && state.snapshot.profileId != profileId) {
             local.value = local.value.copy(switchTargetId = profileId)
+        }
+    }
+
+    /**
+     * Restaura o perfil mais recente apenas depois de confirmar que o túnel SSH
+     * e uma chamada autenticada à API estão funcionando no momento.
+     */
+    fun restorePreviousSession() {
+        if (restoreJob?.isActive == true || local.value.startupComplete) return
+        restoreJob = viewModelScope.launch {
+            local.value = local.value.copy(
+                restoringSession = true,
+                startupMessage = null,
+            )
+            try {
+                val profiles = repo.profiles()
+                val snapshot = tunnelManager.state.value
+                val activeProfile = snapshot.profileId?.let { id ->
+                    profiles.firstOrNull { it.id == id }
+                }
+                val candidate = activeProfile ?: profiles
+                    .filter { it.lastConnectedAt != null }
+                    .maxByOrNull { it.lastConnectedAt ?: Long.MIN_VALUE }
+
+                if (candidate == null ||
+                    !repo.hasSecret(candidate.id) ||
+                    !api.hasCredentials(candidate.id)
+                ) {
+                    finishStartup()
+                    return@launch
+                }
+
+                val existingAttempt = snapshot.profileId == candidate.id &&
+                    snapshot.status in setOf(
+                        TunnelStatus.Connecting,
+                        TunnelStatus.Connected,
+                        TunnelStatus.Reconnecting,
+                    )
+                if (!existingAttempt && !snapshot.hasPendingHostKey) {
+                    SshConnectionService.start(
+                        FreqtradeApplication.appContext,
+                        candidate.id,
+                    )
+                }
+
+                val connected = if (snapshot.profileId == candidate.id &&
+                    snapshot.status == TunnelStatus.Connected
+                ) {
+                    snapshot
+                } else {
+                    withTimeoutOrNull(RESTORE_TUNNEL_TIMEOUT_MS) {
+                        tunnelManager.state.first { current ->
+                            current.profileId == candidate.id &&
+                                (current.status == TunnelStatus.Connected ||
+                                    current.status == TunnelStatus.Error ||
+                                    current.hasPendingHostKey)
+                        }
+                    }
+                }
+                if (connected?.status != TunnelStatus.Connected) {
+                    val failure = when {
+                        connected?.hasPendingHostKey == true ->
+                            "Confirme a identidade do servidor para continuar."
+                        connected?.error != null -> connected.error
+                        else -> "A conexão anterior não foi restaurada. Tente conectar novamente."
+                    }
+                    finishStartup(failure)
+                    return@launch
+                }
+
+                when (val result = api.version(candidate)) {
+                    is ApiResult.Success -> {
+                        local.value = local.value.copy(
+                            startupComplete = true,
+                            restoringSession = false,
+                            restoredProfileId = candidate.id,
+                        )
+                    }
+                    else -> finishStartup(apiFailureMessage(result))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                finishStartup(
+                    error.message
+                        ?: "Não foi possível verificar a conexão anterior. Tente novamente.",
+                )
+            }
         }
     }
 
@@ -157,7 +264,7 @@ class ProfilesViewModel(
      *         orientar o usuário a editar o perfil.
      */
     fun connect(profileId: String) {
-        local.value = local.value.copy(message = null)
+        local.value = local.value.copy(message = null, startupMessage = null)
         val profile = uiState.value.profiles.firstOrNull { it.id == profileId } ?: return
         viewModelScope.launch {
             // Sem chave não há o que conectar: evita um erro de autenticação
@@ -293,6 +400,33 @@ class ProfilesViewModel(
         val switchTargetId: String? = null,
         val deleteTargetId: String? = null,
         val message: String? = null,
+        val startupComplete: Boolean = false,
+        val restoringSession: Boolean = false,
+        val startupMessage: String? = null,
+        val restoredProfileId: String? = null,
     )
-}
 
+    private fun finishStartup(message: String? = null) {
+        local.value = local.value.copy(
+            startupComplete = true,
+            restoringSession = false,
+            startupMessage = message,
+        )
+    }
+
+    private fun apiFailureMessage(result: ApiResult<*>): String = when (result) {
+        is ApiResult.Success -> ""
+        is ApiResult.ConnectionError -> result.message
+        is ApiResult.TunnelUnavailable -> result.message
+        is ApiResult.Unauthorized -> result.message
+        is ApiResult.TokenExpired -> result.message
+        is ApiResult.Unsupported -> result.message
+        is ApiResult.HttpError -> result.message
+        is ApiResult.DeserializationError -> result.message
+        is ApiResult.UnexpectedError -> result.message
+    }
+
+    private companion object {
+        const val RESTORE_TUNNEL_TIMEOUT_MS = 45_000L
+    }
+}

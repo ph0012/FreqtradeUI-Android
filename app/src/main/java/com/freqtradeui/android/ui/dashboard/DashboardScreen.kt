@@ -43,13 +43,15 @@ import java.util.Locale
  * estimado ou simulado.
  *
  * @param viewModel ViewModel do painel.
- * @param onBack volta para a lista de perfis.
+ * @param onBack volta para a lista de perfis, quando disponível.
+ * @param onMenu abre a navegação principal.
  * @param modifier modificador de layout.
  */
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    onMenu: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,6 +64,7 @@ fun DashboardScreen(
             CompactTopAppBar(
                 title = state.profile?.name ?: "Painel",
                 onBack = onBack,
+                onMenu = onMenu,
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Atualizar")

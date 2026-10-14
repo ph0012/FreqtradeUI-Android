@@ -25,6 +25,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,12 +70,15 @@ fun ProfilesScreen(
     onApproveHostKey: () -> Unit,
     onRejectHostKey: () -> Unit,
     modifier: Modifier = Modifier,
+    showMenu: Boolean = false,
+    onMenu: () -> Unit = {},
 ) {
     Scaffold(
         modifier = modifier,
         topBar = {
             CompactTopAppBar(
                 title = "FreqtradeUI",
+                onMenu = if (showMenu) onMenu else null,
                 actions = {
                     IconButton(onClick = onAddProfile) {
                         Icon(Icons.Filled.Add, contentDescription = "Adicionar perfil")
@@ -92,7 +96,22 @@ fun ProfilesScreen(
             }
         },
     ) { padding ->
-        if (state.hasProfiles) {
+        if (!state.startupComplete) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    if (state.restoringSession) "Restaurando conexão anterior..."
+                    else "Verificando perfis...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else if (state.hasProfiles) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(
@@ -100,6 +119,16 @@ fun ProfilesScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                state.startupMessage?.let { message ->
+                    item {
+                        Text(
+                            text = message,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
                 items(state.profiles, key = { it.id }) { profile ->
                     ProfileCard(
                         profile = profile,
@@ -357,4 +386,3 @@ private fun HostKeyTrustDialog(
         dismissButton = { TextButton(onClick = onReject) { Text("Recusar") } },
     )
 }
-

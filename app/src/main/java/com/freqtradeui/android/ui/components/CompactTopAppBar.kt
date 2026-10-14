@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +54,7 @@ private val SIDE_SLOT = 48.dp
  * @param title texto do titulo, centralizado.
  * @param modifier modificador de layout.
  * @param onBack acao do botao de voltar; `null` esconde o botao.
+ * @param onMenu acao do botao do menu lateral; tem precedencia sobre `onBack`.
  * @param actions acoes a direita (icones).
  */
 @Composable
@@ -60,6 +62,7 @@ fun CompactTopAppBar(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    onMenu: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Surface(
@@ -82,7 +85,18 @@ fun CompactTopAppBar(
                     modifier = Modifier.widthIn(min = SIDE_SLOT),
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    if (onBack != null) {
+                    if (onMenu != null) {
+                        IconButton(
+                            onClick = onMenu,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Menu,
+                                contentDescription = "Abrir menu",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    } else if (onBack != null) {
                         IconButton(
                             onClick = onBack,
                             modifier = Modifier.size(40.dp),
