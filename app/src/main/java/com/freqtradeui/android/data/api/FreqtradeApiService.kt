@@ -10,7 +10,7 @@ import com.freqtradeui.android.data.models.LogResponse
 import com.freqtradeui.android.data.models.PerformanceResponse
 import com.freqtradeui.android.data.models.PingResponse
 import com.freqtradeui.android.data.models.ProfitResponse
-import com.freqtradeui.android.data.models.StatusResponse
+import com.freqtradeui.android.data.models.Trade
 import com.freqtradeui.android.data.models.TradesResponse
 import com.freqtradeui.android.data.models.VersionResponse
 import com.freqtradeui.android.data.models.WhitelistResponse
@@ -57,9 +57,9 @@ interface FreqtradeApiService {
     @GET("count")
     suspend fun count(): CountResponse
 
-    /** Estado de execução do bot. */
+    /** Trades atualmente abertos; o endpoint responde uma lista. */
     @GET("status")
-    suspend fun status(): StatusResponse
+    suspend fun status(): List<Trade>
 
     // ---------------- Resultados e conta ----------------
 
@@ -112,6 +112,10 @@ interface FreqtradeApiService {
     /** Autentica e devolve os tokens JWT. */
     @POST("token/login")
     suspend fun login(@Header("Authorization") authorization: String): ApiAuthTokens
+
+    /** Renova o token de acesso usando o refresh token. */
+    @POST("token/refresh")
+    suspend fun refreshToken(@Header("Authorization") authorization: String): ApiAuthTokens
 
     companion object {
         /** Quantidade padrão de dias em `/daily`. */

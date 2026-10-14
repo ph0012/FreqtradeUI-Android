@@ -8,7 +8,6 @@ import com.freqtradeui.android.data.models.ConnectionProfile
 import com.freqtradeui.android.data.models.ConnectionSnapshot
 import com.freqtradeui.android.data.models.CountResponse
 import com.freqtradeui.android.data.models.ProfitResponse
-import com.freqtradeui.android.data.models.StatusResponse
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.data.models.VersionResponse
 import com.freqtradeui.android.data.repository.ConnectionProfileRepository
@@ -207,7 +206,7 @@ class DashboardViewModel(
 
         val version = api.version(profile)
         val health = api.health(profile)
-        val botStatus = api.status(profile)
+        val botConfig = api.showConfig(profile)
         val count = api.count(profile)
         val balance = api.balance(profile)
         val profit = api.profit(profile)
@@ -215,7 +214,7 @@ class DashboardViewModel(
         val failures = listOf(
             failureMessage(version),
             failureMessage(health),
-            failureMessage(botStatus),
+            failureMessage(botConfig),
             failureMessage(count),
             failureMessage(balance),
             failureMessage(profit),
@@ -225,9 +224,11 @@ class DashboardViewModel(
             loading = false,
             error = failures.firstOrNull(),
             version = dataOf(version)?.version ?: local.value.version,
-            health = dataOf(health)?.status ?: local.value.health,
-            botState = dataOf(botStatus)?.state ?: local.value.botState,
-            openTrades = dataOf(count)?.open ?: local.value.openTrades,
+            health = dataOf(health)?.let { report ->
+                report.lastProcess ?: "Sem processamento recente"
+            } ?: local.value.health,
+            botState = dataOf(botConfig)?.state ?: local.value.botState,
+            openTrades = dataOf(count)?.current ?: local.value.openTrades,
             balanceTotal = dataOf(balance)?.let { formatAmount(it.total) } ?: local.value.balanceTotal,
             balanceCurrency = dataOf(balance)?.currency ?: local.value.balanceCurrency,
             profitTotal = dataOf(profit)?.let { formatAmount(it.profitAllCoin) } ?: local.value.profitTotal,

@@ -71,7 +71,11 @@ class FreqtradeRepositoryTest {
     @Test
     fun login_sucessoGuardaTokenEUsaBearerDepois() = runBlocking {
         store.save("p1", ApiCredentials("api-user", "api-pass"))
-        server.enqueue(json("""{"access_token":"tok-123","token_type":"Bearer"}"""))
+        server.enqueue(
+            json(
+                """{"access_token":"tok-123","refresh_token":"refresh-123","token_type":"Bearer"}""",
+            ),
+        )
         server.enqueue(json("""{"version":"2024.1"}"""))
 
         val login = repository.login(profile("p1", server.port))
@@ -92,6 +96,57 @@ class FreqtradeRepositoryTest {
         val guarded = server.takeRequest()
         assertTrue(guarded.path!!.endsWith("/api/v1/version"))
         assertEquals("Bearer tok-123", guarded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun tokenDeAcessoExpirado_renovaSessaoERetentaConsulta() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"old-access","refresh_token":"refresh-123"}"""))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(json("""{"access_token":"new-access"}"""))
+        server.enqueue(json("""{"version":"2026.1"}"""))
+
+        val result = repository.version(profile("p1", server.port))
+
+        assertTrue("consulta deve funcionar após renovar token: $result", result is ApiResult.Success)
+        assertEquals("new-access", repository.accessToken("p1"))
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/token/login"))
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/version"))
+
+        val refreshRequest = server.takeRequest()
+        assertTrue(refreshRequest.path!!.endsWith("/api/v1/token/refresh"))
+        assertNotNull(refreshRequest.getHeader("Authorization"))
+        assertEquals(1, refreshRequest.headers.values("Authorization").size)
+
+        val retriedRequest = server.takeRequest()
+        assertTrue(retriedRequest.path!!.endsWith("/api/v1/version"))
+        assertEquals(1, retriedRequest.headers.values("Authorization").size)
+    }
+
+    @Test
+    fun refreshTokenExpirado_fazLoginNovamenteERetentaConsulta() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"old-access","refresh_token":"expired-refresh"}"""))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(json("""{"access_token":"new-access","refresh_token":"new-refresh"}"""))
+        server.enqueue(json("""{"version":"2026.1"}"""))
+
+        val result = repository.version(profile("p1", server.port))
+
+        assertTrue("consulta deve funcionar após novo login: $result", result is ApiResult.Success)
+        assertEquals("new-access", repository.accessToken("p1"))
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/token/login"))
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/version"))
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/token/refresh"))
+
+        val reloginRequest = server.takeRequest()
+        assertTrue(reloginRequest.path!!.endsWith("/api/v1/token/login"))
+        assertEquals(
+            Credentials.basic("api-user", "api-pass"),
+            reloginRequest.getHeader("Authorization"),
+        )
+        assertTrue(server.takeRequest().path!!.endsWith("/api/v1/version"))
     }
 
     @Test
@@ -205,6 +260,67 @@ class FreqtradeRepositoryTest {
         val data = (result as ApiResult.Success).data
         assertEquals("BTC", data.currency)
         assertEquals(2.0, data.total, 1e-9)
+    }
+
+    @Test
+    fun status_deserializaListaDeTradesAbertos() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"tok-1"}"""))
+        server.enqueue(json("""[{"trade_id":7,"pair":"BTC/USDT","is_open":true}]"""))
+
+        val result = repository.status(profile("p1", server.port))
+
+        val trades = (result as ApiResult.Success).data
+        assertEquals(1, trades.size)
+        assertEquals(7, trades.single().tradeId)
+        assertEquals("BTC/USDT", trades.single().pair)
+    }
+
+    @Test
+    fun showConfig_deserializaEstadoDoBot() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"tok-1"}"""))
+        server.enqueue(
+            json(
+                """{"state":"running","stake_currency":"USDT","stake_amount":"unlimited",""" +
+                    """"max_open_trades":"inf"}""",
+            ),
+        )
+
+        val result = repository.showConfig(profile("p1", server.port))
+
+        assertEquals("running", (result as ApiResult.Success).data.state)
+    }
+
+    @Test
+    fun health_deserializaHealthReportDoFreqtrade() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"tok-1"}"""))
+        server.enqueue(
+            json(
+                """{"last_process":"2026-10-14T12:00:00Z","last_process_ts":1791988800,""" +
+                    """"bot_start":null,"bot_start_ts":null}""",
+            ),
+        )
+
+        val result = repository.health(profile("p1", server.port))
+
+        val health = (result as ApiResult.Success).data
+        assertEquals("2026-10-14T12:00:00Z", health.lastProcess)
+        assertEquals(1791988800L, health.lastProcessTimestamp)
+    }
+
+    @Test
+    fun count_usaCurrentComoNumeroDeTradesAbertos() = runBlocking {
+        store.save("p1", ApiCredentials("api-user", "api-pass"))
+        server.enqueue(json("""{"access_token":"tok-1"}"""))
+        server.enqueue(json("""{"current":2,"max":5,"total_stake":200.0}"""))
+
+        val result = repository.count(profile("p1", server.port))
+
+        val count = (result as ApiResult.Success).data
+        assertEquals(2, count.current)
+        assertEquals(5, count.max)
     }
 
     @Test

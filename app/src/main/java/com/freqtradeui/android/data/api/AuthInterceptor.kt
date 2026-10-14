@@ -10,7 +10,8 @@ import okhttp3.Response
  * a valer imediatamente, sem recriar o cliente HTTP.
  *
  * O token nunca é registrado em log. Quando não há token, a requisição segue
- * sem o cabeçalho — é o caso de `/ping`, `/version` e do próprio login.
+ * sem o cabeçalho — é o caso de endpoints públicos. Cabeçalhos explícitos são
+ * preservados para autenticação Basic e uso do refresh token.
  *
  * @param accessToken token de acesso atual, ou `null` quando não autenticado.
  */
@@ -18,12 +19,16 @@ class AuthInterceptor(private val accessToken: () -> String?) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = accessToken()
-        val request = if (token.isNullOrBlank()) {
-            chain.request()
-        } else {
-            chain.request().newBuilder()
-                .header(HEADER_AUTHORIZATION, "$SCHEME_BEARER $token")
-                .build()
+        val original = chain.request()
+        val explicitAuthorization = original.headers.values(HEADER_AUTHORIZATION).firstOrNull()
+        val request = when {
+            explicitAuthorization != null ->
+                original.newBuilder().header(HEADER_AUTHORIZATION, explicitAuthorization).build()
+            token.isNullOrBlank() -> original
+            else ->
+                original.newBuilder()
+                    .header(HEADER_AUTHORIZATION, "$SCHEME_BEARER $token")
+                    .build()
         }
         return chain.proceed(request)
     }

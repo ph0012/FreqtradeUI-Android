@@ -15,7 +15,7 @@ import com.freqtradeui.android.data.models.LogResponse
 import com.freqtradeui.android.data.models.PerformanceResponse
 import com.freqtradeui.android.data.models.PingResponse
 import com.freqtradeui.android.data.models.ProfitResponse
-import com.freqtradeui.android.data.models.StatusResponse
+import com.freqtradeui.android.data.models.Trade
 import com.freqtradeui.android.data.models.TradesResponse
 import com.freqtradeui.android.data.models.VersionResponse
 import com.freqtradeui.android.data.models.WhitelistResponse
@@ -127,7 +127,11 @@ class FreqtradeRepository(
                 ApiResult.Success(response)
             }
         } catch (e: Exception) {
-            classify(e)
+            if (e is HttpException && e.code() in AUTH_ERROR_CODES) {
+                ApiResult.Unauthorized("Usuário ou senha da API inválidos.", e)
+            } else {
+                classify(e)
+            }
         }
     }
 
@@ -148,7 +152,7 @@ class FreqtradeRepository(
     suspend fun count(profile: ConnectionProfile): ApiResult<CountResponse> =
         read(profile) { count() }
 
-    suspend fun status(profile: ConnectionProfile): ApiResult<StatusResponse> =
+    suspend fun status(profile: ConnectionProfile): ApiResult<List<Trade>> =
         read(profile) { status() }
 
     suspend fun profit(profile: ConnectionProfile): ApiResult<ProfitResponse> =
@@ -195,9 +199,75 @@ class FreqtradeRepository(
         }
         return try {
             ApiResult.Success(service(profile).block())
+        } catch (e: HttpException) {
+            if (e.code() != HTTP_UNAUTHORIZED) {
+                classify(e)
+            } else {
+                try {
+                    refreshSession(profile)
+                    ApiResult.Success(service(profile).block())
+                } catch (retryError: Exception) {
+                    classify(retryError)
+                }
+            }
         } catch (e: Exception) {
             classify(e)
         }
+    }
+
+    /**
+     * Renova a sessão após uma resposta 401 e autentica novamente se o refresh
+     * token também expirou. O chamador repete a consulta no máximo uma vez.
+     */
+    private suspend fun refreshSession(profile: ConnectionProfile) {
+        val current = tokens?.takeIf { tokensProfileId == profile.id }
+            ?: return loginOrThrow(profile)
+        val refreshToken = current.refreshToken
+        if (refreshToken.isNullOrBlank()) {
+            clearSession()
+            return loginOrThrow(profile)
+        }
+
+        return try {
+            val refreshed = service(profile).refreshToken("$BEARER_SCHEME $refreshToken")
+            if (refreshed.accessToken.isBlank()) {
+                throw ApiAuthRequired("A API respondeu sem token de acesso.")
+            } else {
+                val updated = refreshed.copy(
+                    refreshToken = refreshed.refreshToken ?: refreshToken,
+                    tokenType = current.tokenType,
+                )
+                tokens = updated
+                tokensProfileId = profile.id
+            }
+        } catch (e: HttpException) {
+            if (e.code() in AUTH_ERROR_CODES) {
+                clearSession()
+                loginOrThrow(profile)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private suspend fun loginOrThrow(profile: ConnectionProfile) {
+        when (val result = login(profile)) {
+            is ApiResult.Success -> Unit
+            is ApiResult.Unauthorized -> throw ApiAuthRequired(result.message)
+            else -> throw result.exceptionOrDefault()
+        }
+    }
+
+    private fun ApiResult<*>.exceptionOrDefault(): Throwable = when (this) {
+        is ApiResult.Success -> IllegalStateException("A chamada deveria ter falhado.")
+        is ApiResult.ConnectionError -> exception ?: IOException(message)
+        is ApiResult.TunnelUnavailable -> exception ?: ConnectException(message)
+        is ApiResult.Unauthorized -> exception ?: ApiAuthRequired(message)
+        is ApiResult.TokenExpired -> exception ?: ApiAuthRequired(message)
+        is ApiResult.Unsupported -> exception ?: ApiAuthRequired(message)
+        is ApiResult.HttpError -> exception ?: IOException(message)
+        is ApiResult.DeserializationError -> exception ?: IOException(message)
+        is ApiResult.UnexpectedError -> exception ?: IllegalStateException(message)
     }
 
     /**
@@ -243,7 +313,8 @@ class FreqtradeRepository(
             ApiResult.DeserializationError("A resposta da API não corresponde ao esperado.", e)
 
         is HttpException -> when (e.code()) {
-            401, 403 -> ApiResult.Unauthorized("Usuário ou senha da API inválidos.", e)
+            401 -> ApiResult.Unauthorized("A sessão da API expirou ou o token foi recusado.", e)
+            403 -> ApiResult.Unauthorized("O usuário não tem permissão para esta operação.", e)
             404 -> ApiResult.Unsupported("Endpoint não suportado por esta versão da API.", e)
             else -> ApiResult.HttpError(e.code(), "A API respondeu com erro ${e.code()}.", null, e)
         }
@@ -272,5 +343,9 @@ class FreqtradeRepository(
 
         /** Caminho padrão da API do Freqtrade. */
         const val API_PATH = FreqtradeApiService.DEFAULT_API_PATH
+
+        private const val HTTP_UNAUTHORIZED = 401
+        private const val BEARER_SCHEME = "Bearer"
+        private val AUTH_ERROR_CODES = setOf(401, 403)
     }
 }

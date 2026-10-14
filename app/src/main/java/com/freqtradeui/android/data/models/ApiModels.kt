@@ -61,41 +61,24 @@ data class VersionResponse(
     @Json(name = "version") val version: String,
 )
 
-/** Resposta de `GET /health`. */
+/** Health report de `GET /health` do Freqtrade. */
 data class HealthResponse(
-    @Json(name = "status") val status: String,
+    @Json(name = "last_process") val lastProcess: String? = null,
+    @Json(name = "last_process_ts") val lastProcessTimestamp: Long? = null,
 )
 
 /**
  * Configuração do bot (`GET /show_config`).
- *
- * Apenas os campos usados pela interface são tipados; campos desconhecidos são
- * ignorados pela desserialização, o que mantém a compatibilidade entre versões.
  */
 data class ConfigResponse(
-    @Json(name = "dry_run") val dryRun: Boolean = false,
-    @Json(name = "stake_currency") val stakeCurrency: String = "",
-    @Json(name = "stake_amount") val stakeAmount: Double? = null,
-    @Json(name = "timeframe") val timeframe: String? = null,
     @Json(name = "state") val state: String? = null,
-    @Json(name = "max_open_trades") val maxOpenTrades: Int? = null,
-    @Json(name = "exchange") val exchange: String? = null,
-    @Json(name = "pair_whitelist") val pairWhitelist: List<String> = emptyList(),
 )
 
 /** Resposta de `GET /count`. */
 data class CountResponse(
     @Json(name = "current") val current: Int = 0,
-    @Json(name = "total") val total: Int = 0,
-    @Json(name = "open") val open: Int = 0,
-)
-
-/** Resposta de `GET /status`. */
-data class StatusResponse(
-    @Json(name = "state") val state: String = "",
-    @Json(name = "message") val message: String? = null,
-    @Json(name = "max_open_trades") val maxOpenTrades: Int? = null,
-    @Json(name = "available_capital") val availableCapital: Double? = null,
+    @Json(name = "max") val max: Int? = null,
+    @Json(name = "total_stake") val totalStake: Double? = null,
 )
 
 /**
