@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ssh.PendingHostKey
 import com.freqtradeui.android.ui.components.CompactTopAppBar
@@ -204,12 +205,18 @@ private fun ProfileCard(
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = profile.destination,
+                        text = if (profile.connectionMode == ConnectionMode.Direct) {
+                            "Direto · ${profile.destination}"
+                        } else {
+                            profile.destination
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     // Só o nome do arquivo de origem da chave — nunca seu conteúdo.
-                    profile.privateKeyFileName?.let { fileName ->
+                    profile.privateKeyFileName
+                        ?.takeIf { profile.connectionMode == ConnectionMode.SshTunnel }
+                        ?.let { fileName ->
                         Text(
                             text = "Chave: $fileName",
                             style = MaterialTheme.typography.labelSmall,
@@ -218,7 +225,10 @@ private fun ProfileCard(
                     }
                 }
                 if (isActive) {
-                    TunnelStatusChip(status = status)
+                    TunnelStatusChip(
+                        status = status,
+                        direct = profile.connectionMode == ConnectionMode.Direct,
+                    )
                 }
             }
 

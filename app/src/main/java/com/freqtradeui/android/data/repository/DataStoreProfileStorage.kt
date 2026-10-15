@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -51,6 +52,8 @@ class DataStoreProfileStorage(context: Context) : ProfileStorage {
             prefs[stringKey(profile.id, F_REMOTE_HOST)] = profile.remoteHost
             prefs[intKey(profile.id, F_REMOTE_PORT)] = profile.remotePort
             prefs[intKey(profile.id, F_LOCAL_PORT)] = profile.localPort
+            prefs[stringKey(profile.id, F_CONNECTION_MODE)] = profile.connectionMode.name
+            prefs[stringKey(profile.id, F_DIRECT_URL)] = profile.directUrl
             profile.privateKeyFileName?.let {
                 prefs[stringKey(profile.id, F_KEY_FILE_NAME)] = it
             }
@@ -104,6 +107,10 @@ class DataStoreProfileStorage(context: Context) : ProfileStorage {
             privateKeyFileName = prefs[stringKey(id, F_KEY_FILE_NAME)],
             hostKeyFingerprint = prefs[stringKey(id, F_HOST_KEY_FP)],
             lastConnectedAt = prefs[longKey(id, F_LAST_CONNECTED)],
+            connectionMode = prefs[stringKey(id, F_CONNECTION_MODE)]
+                ?.let { mode -> runCatching { ConnectionMode.valueOf(mode) }.getOrNull() }
+                ?: ConnectionMode.SshTunnel,
+            directUrl = prefs[stringKey(id, F_DIRECT_URL)].orEmpty(),
         )
     }
 
@@ -122,9 +129,12 @@ class DataStoreProfileStorage(context: Context) : ProfileStorage {
         const val F_KEY_FILE_NAME = "keyFileName"
         const val F_HOST_KEY_FP = "hostKeyFp"
         const val F_LAST_CONNECTED = "lastConnected"
+        const val F_CONNECTION_MODE = "connectionMode"
+        const val F_DIRECT_URL = "directUrl"
         val ALL_FIELDS = listOf(
             F_NAME, F_HOST, F_SSH_PORT, F_USERNAME, F_REMOTE_HOST, F_REMOTE_PORT,
             F_LOCAL_PORT, F_KEY_FILE_NAME, F_HOST_KEY_FP, F_LAST_CONNECTED,
+            F_CONNECTION_MODE, F_DIRECT_URL,
         )
         val KEY_IDS = stringSetPreferencesKey("profile_ids")
     }

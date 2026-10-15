@@ -8,6 +8,7 @@ import com.freqtradeui.android.data.models.ApiResult
 import com.freqtradeui.android.data.models.BalanceResponse
 import com.freqtradeui.android.data.models.ConfigResponse
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.CountResponse
 import com.freqtradeui.android.data.models.DailyProfitItem
 import com.freqtradeui.android.data.models.HealthResponse
@@ -49,10 +50,10 @@ interface FreqtradeCredentialStore {
 }
 
 /**
- * Acesso à API REST do Freqtrade através do túnel SSH do perfil.
+ * Acesso à API REST do Freqtrade pelo tipo de conexão configurado no perfil.
  *
  * Responsabilidades:
- * - Derivar o endereço base da **porta local** do túnel, nunca do IP público.
+ * - Usar o endereço local encaminhado por SSH ou a URL direta do perfil.
  * - Autenticar (`/token/login`) e guardar o token apenas em memória.
  * - Executar as consultas de leitura e traduzir falhas para [ApiResult].
  *
@@ -106,9 +107,14 @@ class FreqtradeRepository(
 
     // ---------------- Endereço derivado do túnel ----------------
 
-    /** URL base do túnel local: `http://127.0.0.1:<porta local>/api/v1/`. */
+    /** URL base da API, derivada do túnel local ou do endereço direto. */
     fun baseUrl(profile: ConnectionProfile): String =
-        "http://$LOOPBACK_HOST:${profile.localPort}$API_PATH/"
+        when (profile.connectionMode) {
+            ConnectionMode.SshTunnel ->
+                "http://$LOOPBACK_HOST:${profile.localPort}$API_PATH/"
+            ConnectionMode.Direct ->
+                "${profile.directUrl.trim().trimEnd('/')}$API_PATH/"
+        }
 
     // ---------------- Autenticação ----------------
 
@@ -130,7 +136,7 @@ class FreqtradeRepository(
             if (e is HttpException && e.code() in AUTH_ERROR_CODES) {
                 ApiResult.Unauthorized("Usuário ou senha da API inválidos.", e)
             } else {
-                classify(e)
+                classify(e, profile)
             }
         }
     }
@@ -201,17 +207,17 @@ class FreqtradeRepository(
             ApiResult.Success(service(profile).block())
         } catch (e: HttpException) {
             if (e.code() != HTTP_UNAUTHORIZED) {
-                classify(e)
+                classify(e, profile)
             } else {
                 try {
                     refreshSession(profile)
                     ApiResult.Success(service(profile).block())
                 } catch (retryError: Exception) {
-                    classify(retryError)
+                    classify(retryError, profile)
                 }
             }
         } catch (e: Exception) {
-            classify(e)
+            classify(e, profile)
         }
     }
 
@@ -305,7 +311,10 @@ class FreqtradeRepository(
     }
 
     /** Traduz qualquer falha em um [ApiResult] tipado, sem vazar detalhe técnico. */
-    private fun classify(e: Throwable): ApiResult<Nothing> = when (e) {
+    private fun classify(
+        e: Throwable,
+        profile: ConnectionProfile,
+    ): ApiResult<Nothing> = when (e) {
         is ApiAuthRequired ->
             ApiResult.Unauthorized(e.message ?: "Autenticação necessária.")
 
@@ -325,8 +334,11 @@ class FreqtradeRepository(
         is UnknownHostException ->
             ApiResult.ConnectionError("Endereço da API não pôde ser resolvido.", e)
 
-        is ConnectException ->
+        is ConnectException -> if (profile.connectionMode == ConnectionMode.Direct) {
+            ApiResult.ConnectionError("Não foi possível conectar ao endereço direto da API.", e)
+        } else {
             ApiResult.TunnelUnavailable("O túnel SSH não está ativo.", e)
+        }
 
         is IOException ->
             ApiResult.ConnectionError("Falha de rede ao falar com a API.", e)

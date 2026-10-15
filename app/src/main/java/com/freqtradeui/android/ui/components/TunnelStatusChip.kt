@@ -36,8 +36,9 @@ import com.freqtradeui.android.data.models.TunnelStatus
 fun TunnelStatusChip(
     status: TunnelStatus,
     modifier: Modifier = Modifier,
+    direct: Boolean = false,
 ) {
-    val label = status.label
+    val label = if (direct && status == TunnelStatus.Connected) "Direto" else status.label
     val tint = status.color()
 
     Surface(
@@ -51,7 +52,7 @@ fun TunnelStatusChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = status.chipIcon(),
+                imageVector = status.chipIcon(direct),
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier.size(14.dp),
@@ -71,9 +72,9 @@ fun TunnelStatusChip(
  * Privado deste arquivo para não colidir com as extensões de
  * [TunnelStatus] declaradas em `ConnectionIndicator.kt`.
  */
-private fun TunnelStatus.chipIcon() = when (this) {
-    TunnelStatus.Connected -> Icons.Filled.Lock
-    TunnelStatus.Connecting, TunnelStatus.Reconnecting -> Icons.Filled.Sync
-    TunnelStatus.Error -> Icons.Filled.Error
+private fun TunnelStatus.chipIcon(direct: Boolean) = when {
+    this == TunnelStatus.Connected && !direct -> Icons.Filled.Lock
+    this == TunnelStatus.Connecting || this == TunnelStatus.Reconnecting -> Icons.Filled.Sync
+    this == TunnelStatus.Error -> Icons.Filled.Error
     else -> Icons.Filled.CheckCircle
 }

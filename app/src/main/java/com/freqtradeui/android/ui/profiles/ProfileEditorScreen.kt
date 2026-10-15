@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,11 +35,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.ProfileSecret
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -123,6 +127,10 @@ private fun ProfileEditorForm(
     val scope = remember { MainScope() }
 
     var name by remember(existing?.id) { mutableStateOf(existing?.name ?: "") }
+    var connectionMode by remember(existing?.id) {
+        mutableStateOf(existing?.connectionMode ?: ConnectionMode.SshTunnel)
+    }
+    var directUrl by remember(existing?.id) { mutableStateOf(existing?.directUrl ?: "") }
     var host by remember(existing?.id) { mutableStateOf(existing?.host ?: "") }
     var sshPort by remember(existing?.id) {
         mutableStateOf((existing?.sshPort ?: ConnectionProfile.DEFAULT_SSH_PORT).toString())
@@ -202,6 +210,8 @@ private fun ProfileEditorForm(
         privateKeyFileName = keyFileName,
         hostKeyFingerprint = existing?.hostKeyFingerprint,
         lastConnectedAt = existing?.lastConnectedAt,
+        connectionMode = connectionMode,
+        directUrl = directUrl.trim(),
     )
 
     Scaffold(
@@ -244,6 +254,50 @@ private fun ProfileEditorForm(
                 enabled = !isConnected,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Text(
+                "Tipo de conexão",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            listOf(
+                ConnectionMode.SshTunnel to "SSH com redirecionamento de porta",
+                ConnectionMode.Direct to "Direto (URL HTTP(S))",
+            ).forEach { (mode, label) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isConnected) { connectionMode = mode },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = connectionMode == mode,
+                        onClick = { connectionMode = mode },
+                        enabled = !isConnected,
+                    )
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            if (connectionMode == ConnectionMode.Direct) {
+                OutlinedTextField(
+                    value = directUrl,
+                    onValueChange = { directUrl = it },
+                    label = { Text("URL da API *") },
+                    placeholder = { Text("https://freqtrade.exemplo.com") },
+                    singleLine = true,
+                    enabled = !isConnected,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Informe o endereço base do Freqtrade, sem /api/v1. HTTPS é recomendado. " +
+                        "HTTP não criptografa as credenciais nem o tráfego da API.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (connectionMode == ConnectionMode.SshTunnel) {
             OutlinedTextField(
                 value = host,
                 onValueChange = { host = it },
@@ -357,6 +411,7 @@ private fun ProfileEditorForm(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            }
 
             Text(
                 "API do Freqtrade",
@@ -364,8 +419,13 @@ private fun ProfileEditorForm(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Credenciais da API configuradas na VPS (endpoint /api/v1). " +
-                    "Sao diferentes das credenciais SSH e ficam guardadas cifradas.",
+                text = if (connectionMode == ConnectionMode.Direct) {
+                    "Credenciais usadas para acessar a URL acima (endpoint /api/v1). " +
+                        "Ficam guardadas cifradas."
+                } else {
+                    "Credenciais da API configuradas na VPS (endpoint /api/v1). " +
+                        "Sao diferentes das credenciais SSH e ficam guardadas cifradas."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

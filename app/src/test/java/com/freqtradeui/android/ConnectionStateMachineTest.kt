@@ -38,6 +38,27 @@ class ConnectionStateMachineTest {
     }
 
     @Test
+    fun conectarDireto_levaParaConnecting_semAbrirTunel() {
+        val m = machine()
+        val t = m.reduce(ConnectionEvent.ConnectDirect("p-direto"))
+
+        assertEquals(TunnelStatus.Connecting, t.state.status)
+        assertEquals("p-direto", t.state.profileId)
+        assertEquals(ConnectionEffect.None, t.effect)
+    }
+
+    @Test
+    fun conectadoDireto_registraSemPortaLocal() {
+        val m = machine()
+        m.reduce(ConnectionEvent.ConnectDirect("p-direto"))
+        val t = m.reduce(ConnectionEvent.Connected(null))
+
+        assertEquals(TunnelStatus.Connected, t.state.status)
+        assertNull(t.state.localPort)
+        assertNull(t.state.error)
+    }
+
+    @Test
     fun conectado_registraPortaEClearErro() {
         val m = machine()
         m.reduce(ConnectionEvent.Connect("p1"))

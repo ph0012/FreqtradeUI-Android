@@ -72,6 +72,7 @@ data class HealthResponse(
  */
 data class ConfigResponse(
     @Json(name = "state") val state: String? = null,
+    @Json(name = "dry_run") val dryRun: Boolean? = null,
 )
 
 /** Resposta de `GET /count`. */
@@ -97,6 +98,8 @@ data class ProfitResponse(
     @Json(name = "profit_all_fiat") val profitAllFiat: Double? = null,
     @Json(name = "trade_count") val tradeCount: Int? = null,
     @Json(name = "closed_trade_count") val closedTradeCount: Int? = null,
+    @Json(name = "winning_trades") val winningTrades: Int? = null,
+    @Json(name = "losing_trades") val losingTrades: Int? = null,
     @Json(name = "latest_trade_timestamp") val latestTradeTimestamp: Long? = null,
 )
 
@@ -149,6 +152,8 @@ data class Trade(
     @Json(name = "close_timestamp") val closeTimestamp: Long? = null,
     @Json(name = "close_profit") val closeProfit: Double? = null,
     @Json(name = "close_profit_abs") val closeProfitAbs: Double? = null,
+    @Json(name = "profit_abs") val profitAbs: Double? = null,
+    @Json(name = "profit_pct") val profitPercent: Double? = null,
     @Json(name = "realized_profit") val realizedProfit: Double? = null,
     @Json(name = "strategy") val strategy: String? = null,
     @Json(name = "enter_tag") val enterTag: String? = null,

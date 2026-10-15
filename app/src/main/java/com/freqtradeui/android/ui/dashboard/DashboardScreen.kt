@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ui.components.CompactTopAppBar
 import com.freqtradeui.android.ui.components.ConnectionIndicator
@@ -82,6 +83,7 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             ConnectionCard(
+                connectionMode = state.profile?.connectionMode,
                 tunnelStatus = state.snapshot.status,
                 apiError = state.error,
                 apiReady = tunnelConnected && state.hasCredentials &&
@@ -100,7 +102,7 @@ fun DashboardScreen(
 
             if (!tunnelConnected) {
                 EmptyState(
-                    message = "O túnel não está ativo. Volte para a lista de perfis " +
+                    message = "A conexão não está ativa. Volte para a lista de perfis " +
                         "para reconectar.",
                 )
                 return@Column
@@ -136,6 +138,7 @@ fun DashboardScreen(
 /** Card de estado: túnel SSH, comunicação com a API e última atualização. */
 @Composable
 private fun ConnectionCard(
+    connectionMode: ConnectionMode?,
     tunnelStatus: TunnelStatus,
     apiError: String?,
     apiReady: Boolean,
@@ -144,7 +147,14 @@ private fun ConnectionCard(
 ) {
     InfoCard(title = "Conexão") {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            ConnectionIndicator(label = "Túnel SSH", status = tunnelStatus)
+            ConnectionIndicator(
+                label = if (connectionMode == ConnectionMode.Direct) {
+                    "Conexão direta"
+                } else {
+                    "Túnel SSH"
+                },
+                status = tunnelStatus,
+            )
 
             val apiColor = when {
                 apiError != null -> LossRed

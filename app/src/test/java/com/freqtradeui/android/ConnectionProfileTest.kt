@@ -1,6 +1,7 @@
 package com.freqtradeui.android
 
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.ConnectionSnapshot
 import com.freqtradeui.android.data.models.ProfileSecret
 import com.freqtradeui.android.data.models.TunnelStatus
@@ -49,6 +50,23 @@ class ConnectionProfileTest {
         assertTrue(validProfile().copy(localPort = 80).validationError() != null)
         assertTrue(validProfile().copy(localPort = 1024).validationError() == null)
         assertTrue(validProfile().copy(localPort = 65535).validationError() == null)
+    }
+
+    @Test
+    fun perfilDireto_exigeUrlHttpValida() {
+        val direct = validProfile().copy(
+            connectionMode = ConnectionMode.Direct,
+            directUrl = "https://freqtrade.example.com",
+        )
+        assertNull(direct.validationError())
+        assertEquals("https://freqtrade.example.com", direct.destination)
+
+        assertTrue(direct.copy(directUrl = "ftp://freqtrade.example.com")
+            .validationError()!!.contains("http://"))
+        assertTrue(direct.copy(directUrl = "https://user:pass@freqtrade.example.com")
+            .validationError()!!.contains("sem usuário"))
+        assertTrue(direct.copy(directUrl = "https://freqtrade.example.com/api/v1")
+            .validationError()!!.contains("sem caminho"))
     }
 
     // --- Regras de seleção/troca de perfil ---

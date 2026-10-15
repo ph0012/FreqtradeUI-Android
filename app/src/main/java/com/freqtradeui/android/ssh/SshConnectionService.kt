@@ -303,6 +303,10 @@ class SshConnectionService : Service() {
                 .setAction(ACTION_DISCONNECT)
             context.startService(intent)
         }
+
+        /** Encerra o serviço sem alterar o estado, antes de ativar acesso direto. */
+        fun stopForDirectConnection(context: Context) {
+            context.stopService(Intent(context, SshConnectionService::class.java))
+        }
     }
 }
-

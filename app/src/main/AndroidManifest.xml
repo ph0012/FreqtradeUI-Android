@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Única permissão de rede: túnel SSH local e API via loopback. -->
+    <!-- Acesso à API direta ou via túnel SSH local. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Túnel SSH: foreground service iniciado só por ação explícita do

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -47,6 +48,8 @@ import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.ui.components.TunnelStatusChip
 import com.freqtradeui.android.ui.dashboard.DashboardScreen
 import com.freqtradeui.android.ui.dashboard.DashboardViewModel
+import com.freqtradeui.android.ui.comparison.BotComparisonScreen
+import com.freqtradeui.android.ui.comparison.BotComparisonViewModel
 import com.freqtradeui.android.ui.profiles.ProfileEditorScreen
 import com.freqtradeui.android.ui.profiles.ProfilesScreen
 import com.freqtradeui.android.ui.profiles.ProfilesViewModel
@@ -55,6 +58,7 @@ import kotlinx.coroutines.launch
 private const val ROUTE_PROFILES = "profiles"
 private const val ROUTE_PROFILE_EDITOR = "profile_editor?profileId={profileId}"
 private const val ROUTE_DASHBOARD = "dashboard"
+private const val ROUTE_BOT_COMPARISON = "bot_comparison"
 private const val ARG_PROFILE_ID = "profileId"
 
 /**
@@ -137,7 +141,7 @@ fun AppNavigation(
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = authenticatedArea &&
-            currentRoute in setOf(ROUTE_DASHBOARD, ROUTE_PROFILES),
+            currentRoute in setOf(ROUTE_DASHBOARD, ROUTE_PROFILES, ROUTE_BOT_COMPARISON),
         // O conteúdo do drawer nunca pode ficar vazio enquanto o
         // ModalNavigationDrawer estiver composto: ele deriva a âncora "fechado"
         // da largura medida deste slot. Esvaziá-lo colapsava as duas âncoras na
@@ -154,6 +158,13 @@ fun AppNavigation(
                 onDashboard = {
                     closeDrawer {
                         navController.navigate(ROUTE_DASHBOARD) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onBotComparison = {
+                    closeDrawer {
+                        navController.navigate(ROUTE_BOT_COMPARISON) {
                             launchSingleTop = true
                         }
                     }
@@ -228,6 +239,14 @@ fun AppNavigation(
                     StartupLoadingScreen()
                 }
             }
+            composable(ROUTE_BOT_COMPARISON) {
+                val vm: BotComparisonViewModel = viewModel(factory = viewModelFactory)
+                BotComparisonScreen(
+                    viewModel = vm,
+                    onMenu = ::openDrawer,
+                    onOpenProfiles = { navigateToProfiles() },
+                )
+            }
             composable(
                 route = ROUTE_PROFILE_EDITOR,
                 arguments = listOf(
@@ -294,6 +313,7 @@ private fun AppDrawer(
     currentRoute: String?,
     state: com.freqtradeui.android.ui.profiles.ProfilesUiState,
     onDashboard: () -> Unit,
+    onBotComparison: () -> Unit,
     onProfiles: () -> Unit,
     onProfileSelected: (ConnectionProfile) -> Unit,
     onDisconnect: () -> Unit,
@@ -324,6 +344,13 @@ private fun AppDrawer(
             icon = { Icon(Icons.Filled.Dashboard, contentDescription = null) },
             selected = currentRoute == ROUTE_DASHBOARD,
             onClick = onDashboard,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text("Bot Comparison") },
+            icon = { Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null) },
+            selected = currentRoute == ROUTE_BOT_COMPARISON,
+            onClick = onBotComparison,
             modifier = Modifier.padding(horizontal = 12.dp),
         )
         NavigationDrawerItem(

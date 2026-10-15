@@ -14,6 +14,7 @@ import com.freqtradeui.android.security.SecureSecretStore
 import com.freqtradeui.android.ssh.SshConnectionService
 import com.freqtradeui.android.ssh.SshTunnelManager
 import com.freqtradeui.android.ui.dashboard.DashboardViewModel
+import com.freqtradeui.android.ui.comparison.BotComparisonViewModel
 import com.freqtradeui.android.ui.profiles.ProfilesViewModel
 
 /**
@@ -52,6 +53,13 @@ class FreqtradeApplication : Application() {
             initializer {
                 DashboardViewModel(
                     repository = container.profileRepository,
+                    tunnelManager = container.tunnelManager,
+                    api = container.freqtradeRepository,
+                )
+            }
+            initializer {
+                BotComparisonViewModel(
+                    profiles = container.profileRepository,
                     tunnelManager = container.tunnelManager,
                     api = container.freqtradeRepository,
                 )

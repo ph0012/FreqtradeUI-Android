@@ -1,9 +1,19 @@
 package com.freqtradeui.android.data.models
 
+import java.net.URI
 import java.util.UUID
 
+/** Caminho usado para alcançar a API do Freqtrade. */
+enum class ConnectionMode {
+    /** Conecta por SSH e encaminha a API para uma porta local. */
+    SshTunnel,
+
+    /** Conecta à API pelo endereço HTTP(S) informado no perfil. */
+    Direct,
+}
+
 /**
- * Perfil de conexão SSH persistido no dispositivo.
+ * Perfil de conexão persistido no dispositivo.
  *
  * Contém **apenas dados não sensíveis**. A chave privada e a frase secreta
  * nunca ficam aqui: são guardadas separadamente pelo
@@ -41,10 +51,17 @@ data class ConnectionProfile(
     val privateKeyFileName: String? = null,
     val hostKeyFingerprint: String? = null,
     val lastConnectedAt: Long? = null,
+    val connectionMode: ConnectionMode = ConnectionMode.SshTunnel,
+    val directUrl: String = "",
 ) {
 
-    /** Rótulo curto do destino, exibido sob o nome do perfil na lista. */
-    val destination: String get() = "$username@$host:$sshPort"
+    /** Rótulo curto do endereço usado pelo perfil. */
+    val destination: String
+        get() = if (connectionMode == ConnectionMode.Direct) {
+            directUrl
+        } else {
+            "$username@$host:$sshPort"
+        }
 
     /**
      * Primeiro problema de validação encontrado, ou `null` se o perfil estiver
@@ -52,6 +69,7 @@ data class ConnectionProfile(
      */
     fun validationError(): String? = when {
         name.isBlank() -> "Informe um nome para o perfil."
+        connectionMode == ConnectionMode.Direct -> directUrlError(directUrl)
         host.isBlank() -> "Informe o endereço da VPS."
         username.isBlank() -> "Informe o usuário SSH."
         sshPort !in 1..65535 -> "Porta SSH inválida: $sshPort."
@@ -71,6 +89,29 @@ data class ConnectionProfile(
         const val DEFAULT_REMOTE_PORT = 8080
         const val DEFAULT_REMOTE_HOST = "127.0.0.1"
         const val DEFAULT_LOCAL_PORT = 18080
+
+        private fun directUrlError(value: String): String? {
+            if (value.isBlank()) return "Informe o endereço HTTP(S) da API."
+            val uri = runCatching { URI(value.trim()) }.getOrNull()
+                ?: return "O endereço direto não é uma URL válida."
+            val scheme = uri.scheme?.lowercase()
+            if (scheme != "http" && scheme != "https") {
+                return "O endereço direto deve começar com http:// ou https://."
+            }
+            if (uri.host.isNullOrBlank() || uri.rawUserInfo != null) {
+                return "Informe um host válido, sem usuário ou senha na URL."
+            }
+            if (uri.rawQuery != null || uri.rawFragment != null) {
+                return "O endereço direto não pode conter consulta ou fragmento."
+            }
+            if (uri.rawPath !in listOf("", "/")) {
+                return "Informe apenas o endereço do servidor, sem caminho."
+            }
+            if (uri.port != -1 && uri.port !in 1..65535) {
+                return "A porta do endereço direto deve estar entre 1 e 65535."
+            }
+            return null
+        }
 
         /** Cria um identificador único para um novo perfil. */
         fun newId(): String = UUID.randomUUID().toString()

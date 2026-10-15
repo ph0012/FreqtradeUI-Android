@@ -128,6 +128,38 @@ class SshTunnelManager(
         publish(machine.reduce(ConnectionEvent.Connect(profile.id)))
     }
 
+    /** Prepara o estado para testar uma conexão direta, sem manter recursos SSH. */
+    fun beginDirectConnection(profileId: String) {
+        activeProfile = null
+        activeSecret = null
+        pending = null
+        loopJob?.cancel()
+        retryJob?.cancel()
+        monitorJob?.cancel()
+        closeResources()
+        publish(machine.reduce(ConnectionEvent.ConnectDirect(profileId)))
+    }
+
+    /** Publica a conexão direta após a API responder com sucesso. */
+    fun completeDirectConnection(profileId: String) {
+        if (machine.state.profileId != profileId ||
+            machine.state.status != TunnelStatus.Connecting
+        ) return
+        publish(machine.reduce(ConnectionEvent.Connected(null)))
+    }
+
+    /** Publica a falha ao validar o endpoint direto. */
+    fun failDirectConnection(profileId: String, message: String) {
+        if (machine.state.profileId != profileId ||
+            machine.state.status != TunnelStatus.Connecting
+        ) return
+        publish(
+            machine.reduce(
+                ConnectionEvent.Failed(FailureKind.Configuration, message),
+            ),
+        )
+    }
+
     /**
      * Encerra a conexao. Marca o encerramento como intencional, de modo que a
      * queda da sessao nao seja interpretada como falha transitoria.

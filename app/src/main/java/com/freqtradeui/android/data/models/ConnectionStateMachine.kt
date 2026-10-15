@@ -7,8 +7,11 @@ sealed interface ConnectionEvent {
     /** Usuário pediu para conectar ao perfil. */
     data class Connect(val profileId: String) : ConnectionEvent
 
-    /** Handshake e encaminhamento concluídos. */
-    data class Connected(val localPort: Int) : ConnectionEvent
+    /** Usuário pediu uma conexão direta, sem abrir túnel SSH. */
+    data class ConnectDirect(val profileId: String) : ConnectionEvent
+
+    /** Conexão concluída; a porta é nula para acesso direto sem túnel. */
+    data class Connected(val localPort: Int?) : ConnectionEvent
 
     /** Tentativa falhou. */
     data class Failed(val kind: FailureKind, val message: String?) : ConnectionEvent
@@ -87,6 +90,7 @@ class ConnectionStateMachine(
      */
     fun reduce(event: ConnectionEvent): Transition = when (event) {
         is ConnectionEvent.Connect -> onConnect(event.profileId)
+        is ConnectionEvent.ConnectDirect -> onDirectConnect(event.profileId)
         is ConnectionEvent.Connected -> onConnected(event.localPort)
         is ConnectionEvent.Failed -> onFailed(event.kind, event.message)
         is ConnectionEvent.TunnelLost -> onTunnelLost(event.message)
@@ -104,7 +108,16 @@ class ConnectionStateMachine(
         ConnectionEffect.OpenTunnel,
     )
 
-    private fun onConnected(localPort: Int): Transition = commit(
+    private fun onDirectConnect(profileId: String): Transition = commit(
+        ConnectionSnapshot(
+            status = TunnelStatus.Connecting,
+            profileId = profileId,
+            attempt = 0,
+        ),
+        ConnectionEffect.None,
+    )
+
+    private fun onConnected(localPort: Int?): Transition = commit(
         state.copy(
             status = TunnelStatus.Connected,
             localPort = localPort,
@@ -201,4 +214,3 @@ class ConnectionStateMachine(
         return Transition(newState, effect)
     }
 }
-

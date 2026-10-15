@@ -6,6 +6,7 @@ import com.freqtradeui.android.FreqtradeApplication
 import com.freqtradeui.android.data.models.ApiResult
 import com.freqtradeui.android.data.models.ConnectionProfile
 import com.freqtradeui.android.data.models.ConnectionSnapshot
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.models.ProfileSecret
 import com.freqtradeui.android.data.models.TunnelStatus
 import com.freqtradeui.android.data.repository.ConnectionProfileRepository
@@ -177,10 +178,33 @@ class ProfilesViewModel(
                     .maxByOrNull { it.lastConnectedAt ?: Long.MIN_VALUE }
 
                 if (candidate == null ||
-                    !repo.hasSecret(candidate.id) ||
+                    (candidate.connectionMode == ConnectionMode.SshTunnel &&
+                        !repo.hasSecret(candidate.id)) ||
                     !api.hasCredentials(candidate.id)
                 ) {
                     finishStartup()
+                    return@launch
+                }
+
+                if (candidate.connectionMode == ConnectionMode.Direct) {
+                    SshConnectionService.stopForDirectConnection(FreqtradeApplication.appContext)
+                    tunnelManager.beginDirectConnection(candidate.id)
+                    when (val result = api.ping(candidate)) {
+                        is ApiResult.Success -> {
+                            tunnelManager.completeDirectConnection(candidate.id)
+                            repo.markConnected(candidate.id, System.currentTimeMillis())
+                            local.value = local.value.copy(
+                                startupComplete = true,
+                                restoringSession = false,
+                                restoredProfileId = candidate.id,
+                            )
+                        }
+                        else -> {
+                            val failure = apiFailureMessage(result)
+                            tunnelManager.failDirectConnection(candidate.id, failure)
+                            finishStartup(failure)
+                        }
+                    }
                     return@launch
                 }
 
@@ -266,7 +290,46 @@ class ProfilesViewModel(
     fun connect(profileId: String) {
         local.value = local.value.copy(message = null, startupMessage = null)
         val profile = uiState.value.profiles.firstOrNull { it.id == profileId } ?: return
+        val state = uiState.value
+        if (state.snapshot.profileId != null &&
+            state.snapshot.profileId != profileId &&
+            state.snapshot.status in setOf(
+                TunnelStatus.Connecting,
+                TunnelStatus.Connected,
+                TunnelStatus.Reconnecting,
+                TunnelStatus.Stopping,
+            )
+        ) {
+            local.value = local.value.copy(switchTargetId = profileId)
+            return
+        }
+
         viewModelScope.launch {
+            if (profile.connectionMode == ConnectionMode.Direct) {
+                if (!api.hasCredentials(profileId)) {
+                    local.value = local.value.copy(
+                        message = "Configure as credenciais da API deste perfil antes de conectar.",
+                    )
+                    return@launch
+                }
+
+                SshConnectionService.stopForDirectConnection(FreqtradeApplication.appContext)
+                tunnelManager.beginDirectConnection(profileId)
+                api.clearSession()
+                when (val result = api.ping(profile)) {
+                    is ApiResult.Success -> {
+                        tunnelManager.completeDirectConnection(profileId)
+                        repo.markConnected(profileId, System.currentTimeMillis())
+                    }
+                    else -> {
+                        val message = apiFailureMessage(result)
+                        tunnelManager.failDirectConnection(profileId, message)
+                        local.value = local.value.copy(message = message)
+                    }
+                }
+                return@launch
+            }
+
             // Sem chave não há o que conectar: evita um erro de autenticação
             // óbvio e explica o que falta.
             if (!repo.hasSecret(profileId)) {

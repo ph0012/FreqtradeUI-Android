@@ -4,6 +4,7 @@ import com.freqtradeui.android.data.models.ApiAuthTokens
 import com.freqtradeui.android.data.models.ApiCredentials
 import com.freqtradeui.android.data.models.ApiResult
 import com.freqtradeui.android.data.models.ConnectionProfile
+import com.freqtradeui.android.data.models.ConnectionMode
 import com.freqtradeui.android.data.repository.FreqtradeCredentialStore
 import com.freqtradeui.android.data.repository.FreqtradeRepository
 import kotlinx.coroutines.runBlocking
@@ -47,7 +48,7 @@ class FreqtradeRepositoryTest {
         runCatching { server.shutdown() }
     }
 
-    // ---------------- Endereço derivado do túnel ----------------
+    // ---------------- Endereço derivado do perfil ----------------
 
     @Test
     fun baseUrl_vemDaPortaLocalDoPerfil() {
@@ -64,6 +65,19 @@ class FreqtradeRepositoryTest {
 
         assertTrue(url.startsWith("http://127.0.0.1:19001"))
         assertTrue(!url.contains(profile.host))
+    }
+
+    @Test
+    fun baseUrl_diretaAcrescentaCaminhoDaApi() {
+        val profile = profile(id = "direct", port = 18080).copy(
+            connectionMode = ConnectionMode.Direct,
+            directUrl = "https://freqtrade.example.com/",
+        )
+
+        assertEquals(
+            "https://freqtrade.example.com/api/v1/",
+            repository.baseUrl(profile),
+        )
     }
 
     // ---------------- Autenticação ----------------
@@ -266,7 +280,12 @@ class FreqtradeRepositoryTest {
     fun status_deserializaListaDeTradesAbertos() = runBlocking {
         store.save("p1", ApiCredentials("api-user", "api-pass"))
         server.enqueue(json("""{"access_token":"tok-1"}"""))
-        server.enqueue(json("""[{"trade_id":7,"pair":"BTC/USDT","is_open":true}]"""))
+        server.enqueue(
+            json(
+                """[{"trade_id":7,"pair":"BTC/USDT","is_open":true,""" +
+                    """"stake_amount":100.0,"profit_abs":2.5,"profit_pct":2.5}]""",
+            ),
+        )
 
         val result = repository.status(profile("p1", server.port))
 
@@ -274,6 +293,9 @@ class FreqtradeRepositoryTest {
         assertEquals(1, trades.size)
         assertEquals(7, trades.single().tradeId)
         assertEquals("BTC/USDT", trades.single().pair)
+        assertEquals(100.0, trades.single().stakeAmount!!, 1e-9)
+        assertEquals(2.5, trades.single().profitAbs!!, 1e-9)
+        assertEquals(2.5, trades.single().profitPercent!!, 1e-9)
     }
 
     @Test
