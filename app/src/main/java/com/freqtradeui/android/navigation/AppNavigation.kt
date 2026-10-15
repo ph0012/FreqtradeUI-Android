@@ -138,45 +138,52 @@ fun AppNavigation(
         drawerState = drawerState,
         gesturesEnabled = authenticatedArea &&
             currentRoute in setOf(ROUTE_DASHBOARD, ROUTE_PROFILES),
+        // O conteúdo do drawer nunca pode ficar vazio enquanto o
+        // ModalNavigationDrawer estiver composto: ele deriva a âncora "fechado"
+        // da largura medida deste slot. Esvaziá-lo colapsava as duas âncoras na
+        // mesma posição e o estado era agarrado em Open, deixando o scrim
+        // composto — invisível, mas consumindo todo toque da tela, e sem como
+        // fechá-lo porque gesturesEnabled estava em false. Mantendo o conteúdo
+        // sempre composto, as âncoras ficam estáveis e o drawer nunca abre
+        // sozinho. Fora da área autenticada ele continua inacessível:
+        // gesturesEnabled e o botão de menu são desligados.
         drawerContent = {
-            if (authenticatedArea) {
-                AppDrawer(
-                    currentRoute = currentRoute,
-                    state = profilesState,
-                    onDashboard = {
-                        closeDrawer {
-                            navController.navigate(ROUTE_DASHBOARD) {
-                                launchSingleTop = true
-                            }
+            AppDrawer(
+                currentRoute = currentRoute,
+                state = profilesState,
+                onDashboard = {
+                    closeDrawer {
+                        navController.navigate(ROUTE_DASHBOARD) {
+                            launchSingleTop = true
                         }
-                    },
-                    onProfiles = {
-                        closeDrawer { navigateToProfiles() }
-                    },
-                    onProfileSelected = { profile ->
-                        closeDrawer {
-                            selectProfile(
-                                profile = profile,
-                                state = profilesState,
-                                viewModel = profilesViewModel,
-                                navigateToProfiles = { navigateToProfiles() },
-                                navigateToDashboard = {
-                                    navController.navigate(ROUTE_DASHBOARD) {
-                                        launchSingleTop = true
-                                    }
-                                },
-                            )
-                        }
-                    },
-                    onDisconnect = {
-                        closeDrawer {
-                            profilesViewModel.disconnect()
-                            authenticatedArea = false
-                            navigateToProfiles(clearBackStack = true)
-                        }
-                    },
-                )
-            }
+                    }
+                },
+                onProfiles = {
+                    closeDrawer { navigateToProfiles() }
+                },
+                onProfileSelected = { profile ->
+                    closeDrawer {
+                        selectProfile(
+                            profile = profile,
+                            state = profilesState,
+                            viewModel = profilesViewModel,
+                            navigateToProfiles = { navigateToProfiles() },
+                            navigateToDashboard = {
+                                navController.navigate(ROUTE_DASHBOARD) {
+                                    launchSingleTop = true
+                                }
+                            },
+                        )
+                    }
+                },
+                onDisconnect = {
+                    closeDrawer {
+                        profilesViewModel.disconnect()
+                        authenticatedArea = false
+                        navigateToProfiles(clearBackStack = true)
+                    }
+                },
+            )
         },
     ) {
         NavHost(
